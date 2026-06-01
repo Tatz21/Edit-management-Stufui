@@ -33,6 +33,9 @@ class MainActivity : ComponentActivity() {
         val factory = MainViewModelFactory(authRepo, projectRepo)
         val viewModel: MainViewModel by viewModels { factory }
 
+        // Load dynamically managed editors list
+        viewModel.loadEditors(this)
+
         // Start background checks for deadlines, payments or overdue contracts
         viewModel.triggerAutomatedNotificationChecks()
 

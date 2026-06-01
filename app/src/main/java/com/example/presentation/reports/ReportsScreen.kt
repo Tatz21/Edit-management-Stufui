@@ -35,6 +35,7 @@ fun ReportsScreen(
     modifier: Modifier = Modifier
 ) {
     val projects by viewModel.projects.collectAsState()
+    val dynamicEditors by viewModel.editorsState.collectAsState()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
@@ -66,9 +67,8 @@ fun ReportsScreen(
     }
 
     // 2. Compute Editor Metrics
-    val editors = Project.EDITORS
-    val editorPerformanceList = remember(projects) {
-        editors.map { e ->
+    val editorPerformanceList = remember(projects, dynamicEditors) {
+        dynamicEditors.map { e ->
             val assigned = projects.filter { it.assignedEditor.equals(e, ignoreCase = true) }
             val totalAssignedCount = assigned.size
             val completedCount = assigned.count { it.status == "Completed" }

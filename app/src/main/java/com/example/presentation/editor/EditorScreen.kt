@@ -28,6 +28,10 @@ import com.example.ui.theme.PriorityMedium
 import java.text.SimpleDateFormat
 import java.util.*
 
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Add
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
@@ -35,7 +39,9 @@ fun EditorScreen(
     modifier: Modifier = Modifier
 ) {
     val projects by viewModel.projects.collectAsState()
-    val editors = Project.EDITORS
+    val editors by viewModel.editorsState.collectAsState()
+    val context = LocalContext.current
+    var newEditorName by remember { mutableStateOf("") }
     
     var selectedEditorForWorkload by remember { mutableStateOf<String?>(null) }
 
@@ -57,6 +63,46 @@ fun EditorScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             
+            // Add Editor Panel
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = newEditorName,
+                        onValueChange = { newEditorName = it },
+                        label = { Text("New Editor Name") },
+                        modifier = Modifier.weight(1f).testTag("new_editor_name_input"),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface
+                        )
+                    )
+                    Button(
+                        onClick = {
+                            if (newEditorName.trim().isNotEmpty()) {
+                                viewModel.addEditor(context, newEditorName)
+                                newEditorName = ""
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.height(56.dp).testTag("add_editor_btn")
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add")
+                    }
+                }
+            }
+
             Text(
                 text = "Editors Workload and Output Performance:",
                 fontWeight = FontWeight.Bold,
@@ -68,7 +114,7 @@ fun EditorScreen(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(editors) { editor ->
+                items(editors, key = { it }) { editor ->
                     val editorProjects = remember(projects, editor) {
                         projects.filter { it.assignedEditor.equals(editor, ignoreCase = true) }
                     }
@@ -95,7 +141,8 @@ fun EditorScreen(
                         completed = completedCount,
                         revenue = revContribution,
                         nearestDeadline = nearestDLineStr,
-                        onClick = { selectedEditorForWorkload = editor }
+                        onClick = { selectedEditorForWorkload = editor },
+                        onDelete = { viewModel.removeEditor(context, editor) }
                     )
                 }
             }
@@ -144,6 +191,7 @@ fun EditorPerformanceCard(
     revenue: Double,
     nearestDeadline: String,
     onClick: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -178,7 +226,15 @@ fun EditorPerformanceCard(
                     Text(text = name, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
                 }
 
-                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { onDelete() },
+                        modifier = Modifier.testTag("delete_editor_btn_$name")
+                    ) {
+                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Editor", tint = MaterialTheme.colorScheme.error)
+                    }
+                    Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))

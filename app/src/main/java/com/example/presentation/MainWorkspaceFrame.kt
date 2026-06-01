@@ -12,6 +12,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.presentation.auth.LoginScreen
 import com.example.presentation.dashboard.DashboardScreen
 import com.example.presentation.editor.EditorScreen
@@ -22,6 +25,7 @@ import com.example.presentation.project.ProjectListScreen
 import com.example.presentation.reports.ReportsScreen
 import com.example.presentation.settings.SettingsScreen
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainWorkspaceFrame(
     viewModel: MainViewModel,
@@ -38,17 +42,19 @@ fun MainWorkspaceFrame(
         LoginScreen(viewModel = viewModel)
     } else {
         // Safe authenticated workspace
+        var showMoreBottomSheet by remember { mutableStateOf(false) }
+
         BoxWithConstraints(modifier = modifier.fillMaxSize()) {
             val isTablet = maxWidth > 600.dp
             
             // Sidebar Navigation Item definition
             val navItems = listOf(
-                NavItem("dashboard", "Dashboard", Icons.Default.Dashboard),
-                NavItem("projects_list", "Projects", Icons.Default.Folder),
-                NavItem("kanban", "Kanban", Icons.Default.ViewKanban),
-                NavItem("editors", "Editors", Icons.Default.People),
-                NavItem("reports", "Reports", Icons.Default.Assessment),
-                NavItem("settings", "Settings", Icons.Default.Settings)
+                NavItem("dashboard", "Dashboard", Icons.Default.Dashboard, "Workspace performance KPI metrics"),
+                NavItem("projects_list", "Projects", Icons.Default.Folder, "Pipeline detail lists, edits, and tracker"),
+                NavItem("kanban", "Kanban", Icons.Default.ViewKanban, "Drag-and-drop workflow status boards"),
+                NavItem("editors", "Editors", Icons.Default.People, "Manage editing team and workload balance"),
+                NavItem("reports", "Reports", Icons.Default.Assessment, "Analyze monthly revenues and outputs"),
+                NavItem("settings", "Settings", Icons.Default.Settings, "Theme preferences, cloud sync, and backup tools")
             )
 
             Row(modifier = Modifier.fillMaxSize()) {
@@ -98,7 +104,9 @@ fun MainWorkspaceFrame(
                                     containerColor = MaterialTheme.colorScheme.surface,
                                     windowInsets = WindowInsets.navigationBars
                                 ) {
-                                    navItems.forEach { item ->
+                                    // 1. First 3 items
+                                    val primaryItems = navItems.take(3)
+                                    primaryItems.forEach { item ->
                                         val isSelected = currentScreenRoute == item.route || 
                                                        (item.route == "projects_list" && (currentScreenRoute == "projects_details" || currentScreenRoute == "projects_form"))
                                         NavigationBarItem(
@@ -112,6 +120,16 @@ fun MainWorkspaceFrame(
                                             modifier = Modifier.testTag("nav_item_${item.route}")
                                         )
                                     }
+
+                                    // 2. Fourth item is the sliding "More" action
+                                    val isSecondaryActive = currentScreenRoute in listOf("editors", "reports", "settings")
+                                    NavigationBarItem(
+                                        selected = isSecondaryActive,
+                                        onClick = { showMoreBottomSheet = true },
+                                        icon = { Icon(imageVector = Icons.Default.Menu, contentDescription = "More options") },
+                                        label = { Text("More", fontSize = 9.sp) },
+                                        modifier = Modifier.testTag("nav_item_more")
+                                    )
                                 }
                             }
                         }
@@ -124,7 +142,8 @@ fun MainWorkspaceFrame(
                             when (currentScreenRoute) {
                                 "dashboard" -> DashboardScreen(
                                     viewModel = viewModel,
-                                    onNavigateToProjects = { currentScreenRoute = "projects_list" }
+                                    onNavigateToProjects = { currentScreenRoute = "projects_list" },
+                                    onNavigateToSettings = { currentScreenRoute = "settings" }
                                 )
                                 "projects_list" -> ProjectListScreen(
                                     viewModel = viewModel,
@@ -135,7 +154,8 @@ fun MainWorkspaceFrame(
                                     onNavigateToAddProject = {
                                         nestedProjectIdParam = null
                                         currentScreenRoute = "projects_form"
-                                    }
+                                    },
+                                    onNavigateToSettings = { currentScreenRoute = "settings" }
                                 )
                                 "projects_details" -> ProjectDetailsScreen(
                                     viewModel = viewModel,
@@ -181,6 +201,82 @@ fun MainWorkspaceFrame(
                     }
                 }
             }
+
+            // Slide Up Modal Bottom Sheet presenting secondary navigation options
+            if (showMoreBottomSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showMoreBottomSheet = false },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .navigationBarsPadding(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "More Workspace Tools",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        
+                        val secondaryItems = navItems.drop(3)
+                        
+                        secondaryItems.forEach { item ->
+                            val isItemActive = currentScreenRoute == item.route
+                            Surface(
+                                onClick = {
+                                    currentScreenRoute = item.route
+                                    nestedProjectIdParam = null
+                                    showMoreBottomSheet = false
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isItemActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth().testTag("sheet_item_${item.route}")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = item.icon,
+                                        contentDescription = item.label,
+                                        tint = if (isItemActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = item.label,
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = if (isItemActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = item.desc,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isItemActive) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = null,
+                                        tint = if (isItemActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
         }
     }
 }
@@ -189,5 +285,6 @@ fun MainWorkspaceFrame(
 private data class NavItem(
     val route: String,
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val desc: String = ""
 )

@@ -32,6 +32,42 @@ class MainViewModel(
         _isDarkTheme.value = !_isDarkTheme.value
     }
 
+    // 1b. Dynamic Editors list persisted via SharedPreferences
+    private val _editorsState = MutableStateFlow<List<String>>(listOf("Mritunjay", "Rijhu", "Didi"))
+    val editorsState = _editorsState.asStateFlow()
+
+    fun loadEditors(context: Context) {
+        val prefs = context.getSharedPreferences("editflow_editors_pref", Context.MODE_PRIVATE)
+        val saved = prefs.getString("editors_list", null)
+        if (saved == null) {
+            val defaultList = listOf("Mritunjay", "Rijhu", "Didi")
+            prefs.edit().putString("editors_list", defaultList.joinToString(",")).apply()
+            _editorsState.value = defaultList
+        } else {
+            _editorsState.value = if (saved.isEmpty()) emptyList() else saved.split(",")
+        }
+    }
+
+    fun addEditor(context: Context, name: String) {
+        val current = _editorsState.value.toMutableList()
+        val trimmed = name.trim()
+        if (trimmed.isNotEmpty() && !current.contains(trimmed)) {
+            current.add(trimmed)
+            _editorsState.value = current
+            val prefs = context.getSharedPreferences("editflow_editors_pref", Context.MODE_PRIVATE)
+            prefs.edit().putString("editors_list", current.joinToString(",")).apply()
+        }
+    }
+
+    fun removeEditor(context: Context, name: String) {
+        val current = _editorsState.value.toMutableList()
+        if (current.remove(name)) {
+            _editorsState.value = current
+            val prefs = context.getSharedPreferences("editflow_editors_pref", Context.MODE_PRIVATE)
+            prefs.edit().putString("editors_list", current.joinToString(",")).apply()
+        }
+    }
+
     // 2. Auth State
     val currentUser: StateFlow<AuthUser?> = authRepository.getSignedInUser()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)

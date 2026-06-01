@@ -49,6 +49,11 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
 
     private fun checkDemoPreferences() {
         val prefs = context.getSharedPreferences("editflow_auth", Context.MODE_PRIVATE)
+        val isLoggedOut = prefs.getBoolean("logged_out", false)
+        if (isLoggedOut) {
+            _currentUser.value = null
+            return
+        }
         val uid = prefs.getString("demo_uid", null)
         if (uid != null) {
             _currentUser.value = AuthUser(
@@ -58,7 +63,13 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
                 photoUrl = ""
             )
         } else {
-            _currentUser.value = null
+            // Auto sign in to Sandbox on first launch or if unconfigured
+            _currentUser.value = AuthUser(
+                uid = "demo_admin_uid_123",
+                name = "EditFlow Admin",
+                email = "tatzmondal@gmail.com",
+                photoUrl = ""
+            )
         }
     }
 
@@ -76,6 +87,8 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
                 email = fUser.email ?: "",
                 photoUrl = fUser.photoUrl?.toString() ?: ""
             )
+            val prefs = context.getSharedPreferences("editflow_auth", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean("logged_out", false).apply()
             _currentUser.value = authUser
             Result.success(authUser)
         } catch (e: Exception) {
@@ -87,6 +100,7 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
         val prefs = context.getSharedPreferences("editflow_auth", Context.MODE_PRIVATE)
         val uid = "demo_admin_uid_123"
         prefs.edit()
+            .putBoolean("logged_out", false)
             .putString("demo_uid", uid)
             .putString("demo_name", name)
             .putString("demo_email", email)
@@ -104,7 +118,7 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
             // Ignore Firebase initialization error
         }
         val prefs = context.getSharedPreferences("editflow_auth", Context.MODE_PRIVATE)
-        prefs.edit().clear().apply()
+        prefs.edit().clear().putBoolean("logged_out", true).apply()
         _currentUser.value = null
     }
 

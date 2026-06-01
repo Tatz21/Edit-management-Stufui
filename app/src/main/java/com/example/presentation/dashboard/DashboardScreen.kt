@@ -13,7 +13,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,10 +37,11 @@ import java.util.*
 fun DashboardScreen(
     viewModel: MainViewModel,
     onNavigateToProjects: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val projects = remember { viewModel.projects }.collectAsState(initial = emptyList()).value
-    val syncState = remember { viewModel.syncStatus }.collectAsState(initial = "Local Mode").value
+    val dynamicEditors by viewModel.editorsState.collectAsState()
 
     // 1. Reactive KPI Computations
     val kpis = remember(projects) {
@@ -85,13 +88,6 @@ fun DashboardScreen(
             } catch (e: Exception) { /* Date parse ignored */ }
         }
         
-        // Pad with standard months if empty to trigger clean view
-        if (map.isEmpty()) {
-            map["Mar 26"] = 75000.0
-            map["Apr 26"] = 145000.0
-            map["May 26"] = 210000.0
-            map["Jun 26"] = 0.0
-        }
         map
     }
 
@@ -100,13 +96,6 @@ fun DashboardScreen(
         val map = mutableMapOf<String, Int>()
         projects.forEach { p ->
             map[p.status] = (map[p.status] ?: 0) + 1
-        }
-        // Pad with mock empty indicator fields if zero projects exist
-        if (map.isEmpty()) {
-            map["New"] = 2
-            map["Editing"] = 3
-            map["Preview Sent"] = 1
-            map["Completed"] = 4
         }
         map
     }
@@ -125,12 +114,6 @@ fun DashboardScreen(
                     map[monthLabel] = (map[monthLabel] ?: 0) + 1
                 }
             } catch (e: Exception) { /* Date parse ignored */ }
-        }
-        if (map.isEmpty()) {
-            map["Mar 26"] = 1
-            map["Apr 26"] = 3
-            map["May 26"] = 5
-            map["Jun 26"] = 0
         }
         map
     }
@@ -155,36 +138,15 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
-                    // Sync badge
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier
-                            .padding(end = 12.dp)
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                RoundedCornerShape(8.dp)
-                            )
-                            .clickable { viewModel.triggerManualSync() }
+                    IconButton(
+                        onClick = onNavigateToSettings,
+                        modifier = Modifier.padding(end = 8.dp).testTag("dashboard_settings_button")
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(
-                                        if (syncState.contains("Sync", ignoreCase = true)) Color(0xFF10B981) else Color(0xFFF59E0B),
-                                        RoundedCornerShape(50)
-                                    )
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = syncState, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -257,6 +219,7 @@ fun DashboardScreen(
                         
                         BentoEditorWorkloadCard(
                             projects = projects,
+                            editors = dynamicEditors,
                             isDark = isDark,
                             onNavigate = onNavigateToProjects
                         )
@@ -358,6 +321,7 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         BentoEditorWorkloadCard(
                             projects = projects,
+                            editors = dynamicEditors,
                             isDark = isDark,
                             onNavigate = onNavigateToProjects
                         )
@@ -653,6 +617,7 @@ fun BentoRevenueCard(
 @Composable
 fun BentoEditorWorkloadCard(
     projects: List<Project>,
+    editors: List<String>,
     isDark: Boolean,
     onNavigate: () -> Unit,
     modifier: Modifier = Modifier
@@ -660,14 +625,6 @@ fun BentoEditorWorkloadCard(
     val cardBg = if (isDark) Color(0xFF1C1B1F) else Color(0xFFFFFFFF)
     val borderCol = if (isDark) Color(0xFF49454F) else Color(0xFFCAC4D0)
     val headingColor = if (isDark) Color(0xFFCCC2DC) else Color(0xFF1D192B)
-
-    val mritunjayActive = projects.count { it.assignedEditor.equals("Mritunjay", ignoreCase = true) && it.status != "Completed" && it.status != "On Hold" }
-    val rijhuActive = projects.count { it.assignedEditor.equals("Rijhu", ignoreCase = true) && it.status != "Completed" && it.status != "On Hold" }
-    val didiActive = projects.count { it.assignedEditor.equals("Didi", ignoreCase = true) && it.status != "Completed" && it.status != "On Hold" }
-
-    val mPercent = if (projects.isEmpty()) 0.85f else ((mritunjayActive * 0.20f) + 0.25f).coerceIn(0.10f, 0.95f)
-    val rPercent = if (projects.isEmpty()) 0.40f else ((rijhuActive * 0.20f) + 0.15f).coerceIn(0.10f, 0.95f)
-    val dPercent = if (projects.isEmpty()) 0.60f else ((didiActive * 0.20f) + 0.20f).coerceIn(0.10f, 0.95f)
 
     Card(
         modifier = modifier
@@ -691,34 +648,31 @@ fun BentoEditorWorkloadCard(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
             
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                EditorWorkloadRow(
-                    avatarName = "M",
-                    name = "Mritunjay",
-                    percent = mPercent,
-                    color = Color(0xFF6750A4),
-                    isActive = mritunjayActive > 0,
-                    activeCount = mritunjayActive,
-                    isDark = isDark
-                )
-                EditorWorkloadRow(
-                    avatarName = "R",
-                    name = "Rijhu",
-                    percent = rPercent,
-                    color = Color(0xFF006A6A),
-                    isActive = rijhuActive > 0,
-                    activeCount = rijhuActive,
-                    isDark = isDark
-                )
-                EditorWorkloadRow(
-                    avatarName = "D",
-                    name = "Didi",
-                    percent = dPercent,
-                    color = Color(0xFF7D5260),
-                    isActive = didiActive > 0,
-                    activeCount = didiActive,
-                    isDark = isDark
-                )
+            val displayEditors = editors.take(5)
+            if (displayEditors.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                    Text("No editors configured.", fontSize = 13.sp, color = if (isDark) Color.LightGray else Color.DarkGray)
+                }
+            } else {
+                val colorsList = listOf(Color(0xFF6750A4), Color(0xFF006A6A), Color(0xFF7D5260), Color(0xFF10B981), Color(0xFFE28743))
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    displayEditors.forEachIndexed { index, editorName ->
+                        val activeCount = projects.count { it.assignedEditor.equals(editorName, ignoreCase = true) && it.status != "Completed" && it.status != "On Hold" }
+                        val percent = if (projects.isEmpty()) 0.40f else ((activeCount * 0.20f) + 0.15f).coerceIn(0.10f, 0.95f)
+                        val color = colorsList[index % colorsList.size]
+                        val avatar = if (editorName.isNotEmpty()) editorName.take(1).uppercase() else "E"
+
+                        EditorWorkloadRow(
+                            avatarName = avatar,
+                            name = editorName,
+                            percent = percent,
+                            color = color,
+                            isActive = activeCount > 0,
+                            activeCount = activeCount,
+                            isDark = isDark
+                        )
+                    }
+                }
             }
         }
     }

@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "211397900122",
+    "firebase_url": "https://editflow-pro-53228-default-rtdb.firebaseio.com",
+    "project_id": "editflow-pro-53228",
+    "storage_bucket": "editflow-pro-53228.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:211397900122:android:8af65ebbd547b7ce5a2563",
+        "android_client_info": {
+          "package_name": "com.aistudio.editflowpro.tqzxlw"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "211397900122-omogqbffgv2eb8omjf4v3gtacm4u95nt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBHWc9KXMllZh-K7rG6IrAwV98wh1o-6PI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "211397900122-omogqbffgv2eb8omjf4v3gtacm4u95nt.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -31,6 +31,7 @@ fun ProjectFormScreen(
     modifier: Modifier = Modifier
 ) {
     val projects by viewModel.projects.collectAsState()
+    val dynamicEditors by viewModel.editorsState.collectAsState()
     val isEditMode = !projectId.isNullOrEmpty()
     val existingProject = remember(projectId, projects) {
         projects.find { it.projectId == projectId }
@@ -207,7 +208,7 @@ fun ProjectFormScreen(
             CustomDropdownSelector(
                 label = "Assign Editor",
                 selected = assignedEditor,
-                options = listOf("Unassigned") + Project.EDITORS,
+                options = listOf("Unassigned") + dynamicEditors,
                 onSelected = { assignedEditor = it }
             )
 

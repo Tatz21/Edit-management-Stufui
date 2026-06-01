@@ -29,9 +29,11 @@ fun ProjectListScreen(
     viewModel: MainViewModel,
     onNavigateToProjectDetails: (String) -> Unit,
     onNavigateToAddProject: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val projects by viewModel.filteredProjects.collectAsState()
+    val dynamicEditors by viewModel.editorsState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     
     val selectedEditor by viewModel.filterEditor.collectAsState()
@@ -60,6 +62,12 @@ fun ProjectListScreen(
                         }) {
                             Icon(imageVector = Icons.Default.FilterList, contentDescription = "Filters")
                         }
+                    }
+                    IconButton(
+                        onClick = onNavigateToSettings,
+                        modifier = Modifier.testTag("list_settings_button")
+                    ) {
+                        Icon(imageVector = Icons.Default.Settings, contentDescription = "Settings")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -161,7 +169,7 @@ fun ProjectListScreen(
                     CustomDropdownSelector(
                         label = "Assigned Editor",
                         selected = selectedEditor,
-                        options = listOf("All") + Project.EDITORS,
+                        options = listOf("All") + dynamicEditors,
                         onSelected = { viewModel.updateFilterEditor(it) }
                     )
 
