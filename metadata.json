@@ -1,0 +1,6 @@
+{
+  "name": "EditFlow Pro",
+  "description": "SaaS dashboard for managing clients, projects, payments, timelines, and workloads of a video editing agency.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
