@@ -167,28 +167,6 @@ fun LoginScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Bypass option for testing inside Streaming Emulator
-                OutlinedButton(
-                    onClick = {
-                        viewModel.handleBypassSignIn()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .testTag("bypass_sandbox_login_button"),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                ) {
-                    Text(
-                        text = "Launch Sandbox Dashboard",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-                
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 Text(

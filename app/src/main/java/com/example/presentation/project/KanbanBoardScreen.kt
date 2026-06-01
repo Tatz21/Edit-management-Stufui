@@ -36,8 +36,17 @@ fun KanbanBoardScreen(
     modifier: Modifier = Modifier
 ) {
     val projects by viewModel.projects.collectAsState()
-    val columns = Project.STATUS_OPTIONS
     val scrollState = rememberScrollState()
+
+    var filterGroup by remember { mutableStateOf("Active") } // "Active", "Deliveries", "All"
+
+    val activeColumns = listOf("New", "Assigned", "Editing", "Revision")
+    val deliveryColumns = listOf("Preview Sent", "Final Delivery", "Completed", "On Hold")
+    val columns = when (filterGroup) {
+        "Active" -> activeColumns
+        "Deliveries" -> deliveryColumns
+        else -> Project.STATUS_OPTIONS
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -54,30 +63,62 @@ fun KanbanBoardScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .horizontalScroll(scrollState)
-                .padding(bottom = 16.dp, top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            columns.forEach { colName ->
-                val colProjects = remember(projects, colName) {
-                    projects.filter { it.status.equals(colName, ignoreCase = true) }
-                }
-                
-                KanbanColumn(
-                    columnName = colName,
-                    projects = colProjects,
-                    onMoveProject = { pId, nextSt -> viewModel.updateProjectStatus(pId, nextSt) },
-                    onClickProject = onNavigateToProjectDetails
+            // Filter row to prevent Kanban from being too wide/broad
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilterChip(
+                    selected = filterGroup == "Active",
+                    onClick = { filterGroup = "Active" },
+                    label = { Text("Active Pipeline", fontSize = 12.sp) }
+                )
+                FilterChip(
+                    selected = filterGroup == "Deliveries",
+                    onClick = { filterGroup = "Deliveries" },
+                    label = { Text("Deliveries & Paused", fontSize = 12.sp) }
+                )
+                FilterChip(
+                    selected = filterGroup == "All",
+                    onClick = { filterGroup = "All" },
+                    label = { Text("Show All Columns", fontSize = 12.sp) }
                 )
             }
-            
-            Spacer(modifier = Modifier.width(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .horizontalScroll(scrollState)
+                    .padding(bottom = 16.dp, top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                columns.forEach { colName ->
+                    val colProjects = remember(projects, colName) {
+                        projects.filter { it.status.equals(colName, ignoreCase = true) }
+                    }
+                    
+                    KanbanColumn(
+                        columnName = colName,
+                        projects = colProjects,
+                        onMoveProject = { pId, nextSt -> viewModel.updateProjectStatus(pId, nextSt) },
+                        onClickProject = onNavigateToProjectDetails
+                    )
+                }
+                
+                Spacer(modifier = Modifier.width(8.dp))
+            }
         }
     }
 }
@@ -103,7 +144,7 @@ fun KanbanColumn(
 
     Box(
         modifier = modifier
-            .width(280.dp)
+            .width(260.dp)
             .fillMaxHeight()
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), RoundedCornerShape(16.dp))

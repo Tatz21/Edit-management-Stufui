@@ -112,12 +112,15 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
     }
 
     override suspend fun signOut() {
+        val prefs = context.getSharedPreferences("editflow_auth", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("logged_out", true).commit()
         try {
-            FirebaseAuth.getInstance().signOut()
+            if (isFirebaseConfigured()) {
+                FirebaseAuth.getInstance().signOut()
+            }
         } catch (e: Exception) {
             // Ignore Firebase initialization error
         }
-        val prefs = context.getSharedPreferences("editflow_auth", Context.MODE_PRIVATE)
         prefs.edit().clear().putBoolean("logged_out", true).apply()
         _currentUser.value = null
     }

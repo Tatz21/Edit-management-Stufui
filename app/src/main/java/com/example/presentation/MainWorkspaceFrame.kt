@@ -37,6 +37,13 @@ fun MainWorkspaceFrame(
     var currentScreenRoute by remember { mutableStateOf("dashboard") }
     var nestedProjectIdParam by remember { mutableStateOf<String?>(null) } // Target project ID for Details or Form Edits
 
+    LaunchedEffect(currentUser) {
+        if (currentUser == null) {
+            currentScreenRoute = "dashboard"
+            nestedProjectIdParam = null
+        }
+    }
+
     if (currentUser == null) {
         // Fallback or Sandbox Login
         LoginScreen(viewModel = viewModel)
@@ -104,8 +111,8 @@ fun MainWorkspaceFrame(
                                     containerColor = MaterialTheme.colorScheme.surface,
                                     windowInsets = WindowInsets.navigationBars
                                 ) {
-                                    // 1. First 3 items
-                                    val primaryItems = navItems.take(3)
+                                    // 1. First 4 items
+                                    val primaryItems = navItems.take(4)
                                     primaryItems.forEach { item ->
                                         val isSelected = currentScreenRoute == item.route || 
                                                        (item.route == "projects_list" && (currentScreenRoute == "projects_details" || currentScreenRoute == "projects_form"))
@@ -121,8 +128,8 @@ fun MainWorkspaceFrame(
                                         )
                                     }
 
-                                    // 2. Fourth item is the sliding "More" action
-                                    val isSecondaryActive = currentScreenRoute in listOf("editors", "reports", "settings")
+                                    // 2. Fifth item is the sliding "More" action
+                                    val isSecondaryActive = currentScreenRoute in listOf("reports", "settings")
                                     NavigationBarItem(
                                         selected = isSecondaryActive,
                                         onClick = { showMoreBottomSheet = true },
@@ -225,7 +232,7 @@ fun MainWorkspaceFrame(
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                         
-                        val secondaryItems = navItems.drop(3)
+                        val secondaryItems = navItems.drop(4)
                         
                         secondaryItems.forEach { item ->
                             val isItemActive = currentScreenRoute == item.route
