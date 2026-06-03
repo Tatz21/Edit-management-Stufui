@@ -1,5 +1,6 @@
 package com.example.presentation.dashboard
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +39,7 @@ fun DashboardScreen(
     viewModel: MainViewModel,
     onNavigateToProjects: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToProjectDetails: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val projects = remember { viewModel.projects }.collectAsState(initial = emptyList()).value
@@ -234,6 +236,14 @@ fun DashboardScreen(
                         contentPadding = PaddingValues(bottom = 32.dp)
                     ) {
                         item {
+                            ActiveProjectsSection(
+                                projects = projects,
+                                onProjectClick = onNavigateToProjectDetails,
+                                onNavigateToProjects = onNavigateToProjects,
+                                isDark = isDark
+                            )
+                        }
+                        item {
                             Text(
                                 text = "Visual Growth Analytics",
                                 fontWeight = FontWeight.Bold,
@@ -294,6 +304,15 @@ fun DashboardScreen(
                                 modifier = Modifier.weight(1f)
                             )
                         }
+                    }
+
+                    item {
+                        ActiveProjectsSection(
+                            projects = projects,
+                            onProjectClick = onNavigateToProjectDetails,
+                            onNavigateToProjects = onNavigateToProjects,
+                            isDark = isDark
+                        )
                     }
 
                     item {
@@ -750,4 +769,333 @@ fun EditorWorkloadRow(
 
 private fun formatAmount(v: Double): String {
     return String.format(Locale.getDefault(), "%,.0f", v)
+}
+
+@Composable
+fun ActiveProjectsSection(
+    projects: List<Project>,
+    onProjectClick: (String) -> Unit,
+    onNavigateToProjects: () -> Unit,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val activeProjects = remember(projects) {
+        projects.filter { it.status != "Completed" && it.status != "On Hold" }
+            .sortedBy { p ->
+                try {
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    sdf.parse(p.deadlineDate)?.time ?: Long.MAX_VALUE
+                } catch (e: Exception) {
+                    Long.MAX_VALUE
+                }
+            }
+    }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Movie,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Active Video Pipeline",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                Text(
+                    text = "${activeProjects.size} Projects",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickable { onNavigateToProjects() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
+            if (activeProjects.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VideoCameraBack,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
+                    Text(
+                        text = "No active video editing projects",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    activeProjects.take(6).forEach { project ->
+                        ActiveProjectRowItem(
+                            project = project,
+                            isDark = isDark,
+                            onClick = { onProjectClick(project.projectId) }
+                        )
+                    }
+
+                    if (activeProjects.size > 6) {
+                        Surface(
+                            onClick = onNavigateToProjects,
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color.Transparent,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "View remaining ${activeProjects.size - 6} active projects...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ActiveProjectRowItem(
+    project: Project,
+    isDark: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val today = Date()
+    val isOverdue = remember(project.deadlineDate) {
+        try {
+            val dl = formatter.parse(project.deadlineDate)
+            dl != null && dl.before(today)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    val statusColors = remember(project.status, isDark) {
+        getStatusThemeColors(project.status, isDark)
+    }
+
+    Card(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("active_project_item_${project.projectId}"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isOverdue) {
+                MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+            } else {
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(
+                        color = if (isOverdue) {
+                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (project.projectType.contains("Short", ignoreCase = true) || project.projectType.contains("Reel", ignoreCase = true)) {
+                        Icons.Default.Movie
+                    } else if (project.projectType.contains("Ad", ignoreCase = true) || project.projectType.contains("Promo", ignoreCase = true)) {
+                        Icons.Default.Videocam
+                    } else {
+                        Icons.Default.VideoCameraBack
+                    },
+                    contentDescription = null,
+                    tint = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = project.projectTitle,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = project.clientName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .background(statusColors.bg, RoundedCornerShape(100.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = project.status,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = statusColors.text
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isOverdue) Icons.Default.Warning else Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        tint = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                        text = formatDateLabel(project.deadlineDate),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (isOverdue) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatDateLabel(dateStr: String): String {
+    if (dateStr.isEmpty()) return "No deadline"
+    try {
+        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val date = parser.parse(dateStr)
+        if (date != null) {
+            val formatter = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+            return formatter.format(date)
+        }
+    } catch (e: Exception) {
+        // Fallback
+    }
+    return dateStr
+}
+
+private data class StatusTheme(val bg: Color, val text: Color)
+
+private fun getStatusThemeColors(status: String, isDark: Boolean): StatusTheme {
+    return when (status) {
+        "New" -> StatusTheme(
+            bg = if (isDark) Color(0xFF1D3557).copy(alpha = 0.4f) else Color(0xFFE8F1F5),
+            text = if (isDark) Color(0xFF4EA8DE) else Color(0xFF1D3557)
+        )
+        "Assigned" -> StatusTheme(
+            bg = if (isDark) Color(0xFF005F73).copy(alpha = 0.4f) else Color(0xFFE0F2F1),
+            text = if (isDark) Color(0xFF94D2BD) else Color(0xFF005F73)
+        )
+        "Editing" -> StatusTheme(
+            bg = if (isDark) Color(0xFFCA6702).copy(alpha = 0.4f) else Color(0xFFFEF3C7),
+            text = if (isDark) Color(0xFFEE9B00) else Color(0xFFB45309)
+        )
+        "Preview Sent" -> StatusTheme(
+            bg = if (isDark) Color(0xFF7209B7).copy(alpha = 0.4f) else Color(0xFFF3E5F5),
+            text = if (isDark) Color(0xFFB5179E) else Color(0xFF7209B7)
+        )
+        "Revision" -> StatusTheme(
+            bg = if (isDark) Color(0xFF9B2226).copy(alpha = 0.4f) else Color(0xFFFFEBEE),
+            text = if (isDark) Color(0xFFE63946) else Color(0xFF9B2226)
+        )
+        "Final Delivery" -> StatusTheme(
+            bg = if (isDark) Color(0xFF1B4332).copy(alpha = 0.4f) else Color(0xFFE8F5E9),
+            text = if (isDark) Color(0xFF52B788) else Color(0xFF1B4332)
+        )
+        "Completed" -> StatusTheme(
+            bg = if (isDark) Color(0xFF1A5235).copy(alpha = 0.4f) else Color(0xFFE8F5E9),
+            text = if (isDark) Color(0xFF2EC4B6) else Color(0xFF1A5235)
+        )
+        else -> StatusTheme(
+            bg = if (isDark) Color(0xFF3F37C9).copy(alpha = 0.4f) else Color(0xFFE8EAF6),
+            text = if (isDark) Color(0xFF4895EF) else Color(0xFF3F37C9)
+        )
+    }
 }

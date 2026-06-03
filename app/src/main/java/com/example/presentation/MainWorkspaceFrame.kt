@@ -150,7 +150,11 @@ fun MainWorkspaceFrame(
                                 "dashboard" -> DashboardScreen(
                                     viewModel = viewModel,
                                     onNavigateToProjects = { currentScreenRoute = "projects_list" },
-                                    onNavigateToSettings = { currentScreenRoute = "settings" }
+                                    onNavigateToSettings = { currentScreenRoute = "settings" },
+                                    onNavigateToProjectDetails = { id ->
+                                        nestedProjectIdParam = id
+                                        currentScreenRoute = "projects_details"
+                                    }
                                 )
                                 "projects_list" -> ProjectListScreen(
                                     viewModel = viewModel,
