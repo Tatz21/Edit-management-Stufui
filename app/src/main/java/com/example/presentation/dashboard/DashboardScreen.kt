@@ -918,8 +918,12 @@ fun ActiveProjectRowItem(
         }
     }
 
-    val statusColors = remember(project.status, isDark) {
-        getStatusThemeColors(project.status, isDark)
+    val displayStatus = remember(project.status) {
+        getDisplayStatus(project.status)
+    }
+
+    val statusColors = remember(displayStatus, isDark) {
+        getDisplayStatusThemeColors(displayStatus, isDark)
     }
 
     Card(
@@ -1011,15 +1015,22 @@ fun ActiveProjectRowItem(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Box(
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier
                         .background(statusColors.bg, RoundedCornerShape(100.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(statusColors.text, RoundedCornerShape(50.dp))
+                    )
                     Text(
-                        text = project.status,
+                        text = displayStatus,
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                         color = statusColors.text
                     )
                 }
@@ -1062,6 +1073,36 @@ private fun formatDateLabel(dateStr: String): String {
 }
 
 private data class StatusTheme(val bg: Color, val text: Color)
+
+private fun getDisplayStatus(status: String): String {
+    return when (status) {
+        "New", "Assigned", "Editing" -> "In Progress"
+        "Preview Sent", "Revision" -> "Under Review"
+        "Final Delivery", "Completed" -> "Completed"
+        else -> "On Hold"
+    }
+}
+
+private fun getDisplayStatusThemeColors(displayStatus: String, isDark: Boolean): StatusTheme {
+    return when (displayStatus) {
+        "In Progress" -> StatusTheme(
+            bg = if (isDark) Color(0xFFF59E0B).copy(alpha = 0.15f) else Color(0xFFFEF3C7),
+            text = if (isDark) Color(0xFFFBBF24) else Color(0xFFB45309)
+        )
+        "Under Review" -> StatusTheme(
+            bg = if (isDark) Color(0xFF0EA5E9).copy(alpha = 0.15f) else Color(0xFFE0F2FE),
+            text = if (isDark) Color(0xFF38BDF8) else Color(0xFF0369A1)
+        )
+        "Completed" -> StatusTheme(
+            bg = if (isDark) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFD1FAE5),
+            text = if (isDark) Color(0xFF34D399) else Color(0xFF047857)
+        )
+        else -> StatusTheme(
+            bg = if (isDark) Color(0xFF94A3B8).copy(alpha = 0.15f) else Color(0xFFF1F5F9),
+            text = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569)
+        )
+    }
+}
 
 private fun getStatusThemeColors(status: String, isDark: Boolean): StatusTheme {
     return when (status) {

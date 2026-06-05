@@ -249,14 +249,17 @@ fun ProjectItemCard(
 ) {
     val progress = if (project.totalAmount > 0) (project.advanceAmount / project.totalAmount).toFloat().coerceIn(0f, 1f) else 0f
     
-    // Status to colors mappings
-    val statusColor = when (project.status) {
-        "New" -> StatusNew
-        "Assigned" -> StatusAssigned
-        "Editing" -> StatusEditing
-        "Preview Sent" -> StatusPreviewSent
-        "Revision" -> StatusRevision
-        "Final Delivery" -> StatusFinalDelivery
+    // Group status to display-friendly grouped label and color mapping
+    val displayStatus = when (project.status) {
+        "New", "Assigned", "Editing" -> "In Progress"
+        "Preview Sent", "Revision" -> "Under Review"
+        "Final Delivery", "Completed" -> "Completed"
+        else -> "On Hold"
+    }
+    
+    val statusColor = when (displayStatus) {
+        "In Progress" -> StatusEditing
+        "Under Review" -> StatusPreviewSent
         "Completed" -> StatusCompleted
         else -> StatusOnHold
     }
@@ -367,12 +370,24 @@ fun ProjectItemCard(
                 // Pipeline workflow status
                 Column(horizontalAlignment = Alignment.End) {
                     Text(text = "Status", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
-                    Box(
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
-                            .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(100.dp))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
-                        Text(text = project.status, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(statusColor, RoundedCornerShape(50.dp))
+                        )
+                        Text(
+                            text = displayStatus,
+                            color = statusColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
                     }
                 }
             }
