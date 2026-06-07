@@ -22,8 +22,10 @@ object ServiceLocator {
 
     fun provideProjectRepository(context: Context): ProjectRepository {
         return projectRepository ?: synchronized(this) {
+            val db = provideDatabase(context)
             val repo = ProjectRepositoryImpl(
-                projectDao = provideDatabase(context).projectDao(),
+                projectDao = db.projectDao(),
+                clientDao = db.clientDao(),
                 context = context.applicationContext
             )
             projectRepository = repo

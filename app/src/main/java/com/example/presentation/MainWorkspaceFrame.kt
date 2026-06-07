@@ -24,6 +24,7 @@ import com.example.presentation.project.ProjectFormScreen
 import com.example.presentation.project.ProjectListScreen
 import com.example.presentation.reports.ReportsScreen
 import com.example.presentation.settings.SettingsScreen
+import com.example.presentation.clients.ClientDirectoryScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +61,7 @@ fun MainWorkspaceFrame(
                 NavItem("projects_list", "Projects", Icons.Default.Folder, "Pipeline detail lists, edits, and tracker"),
                 NavItem("kanban", "Kanban", Icons.Default.ViewKanban, "Drag-and-drop workflow status boards"),
                 NavItem("editors", "Editors", Icons.Default.People, "Manage editing team and workload balance"),
+                NavItem("clients", "Clients", Icons.Default.ContactMail, "Manage client registry profiles and payments"),
                 NavItem("reports", "Reports", Icons.Default.Assessment, "Analyze monthly revenues and outputs"),
                 NavItem("settings", "Settings", Icons.Default.Settings, "Theme preferences, cloud sync, and backup tools")
             )
@@ -197,6 +199,9 @@ fun MainWorkspaceFrame(
                                         nestedProjectIdParam = id
                                         currentScreenRoute = "projects_details"
                                     }
+                                )
+                                "clients" -> ClientDirectoryScreen(
+                                    viewModel = viewModel
                                 )
                                 "editors" -> EditorScreen(
                                     viewModel = viewModel

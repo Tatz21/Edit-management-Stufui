@@ -3,7 +3,9 @@ package com.example.data.repository
 import android.content.Context
 import android.util.Log
 import com.example.data.local.ProjectDao
+import com.example.data.local.ClientDao
 import com.example.domain.model.Project
+import com.example.domain.model.Client
 import com.example.domain.repository.ProjectRepository
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
@@ -17,6 +19,7 @@ import kotlinx.coroutines.tasks.await
 
 class ProjectRepositoryImpl(
     private val projectDao: ProjectDao,
+    private val clientDao: ClientDao,
     private val context: Context
 ) : ProjectRepository {
 
@@ -59,5 +62,17 @@ class ProjectRepositoryImpl(
 
     override suspend fun syncOfflineChanges() {
         // No-op in Local Mode
+    }
+
+    override fun getClients(): Flow<List<Client>> {
+        return clientDao.getAllClientsFlow()
+    }
+
+    override suspend fun saveClient(client: Client) {
+        clientDao.insertClient(client)
+    }
+
+    override suspend fun deleteClient(clientId: String) {
+        clientDao.deleteClient(clientId)
     }
 }
