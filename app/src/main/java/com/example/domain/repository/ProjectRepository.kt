@@ -2,6 +2,7 @@ package com.example.domain.repository
 
 import com.example.domain.model.Project
 import com.example.domain.model.Client
+import com.example.domain.model.Invoice
 import kotlinx.coroutines.flow.Flow
 
 interface ProjectRepository {
@@ -21,4 +22,9 @@ interface ProjectRepository {
     fun getClients(): Flow<List<Client>>
     suspend fun saveClient(client: Client)
     suspend fun deleteClient(clientId: String)
+
+    // Invoice operations
+    fun getInvoices(): Flow<List<Invoice>>
+    suspend fun saveInvoice(invoice: Invoice)
+    suspend fun deleteInvoice(invoiceId: String)
 }

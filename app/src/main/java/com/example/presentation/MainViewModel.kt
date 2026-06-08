@@ -83,6 +83,10 @@ class MainViewModel(
     val clients: StateFlow<List<Client>> = projectRepository.getClients()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // 3c. Invoice / Payment State
+    val invoices: StateFlow<List<Invoice>> = projectRepository.getInvoices()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // 4. Searching, Filtering, Sorting and Date Range
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
@@ -225,6 +229,19 @@ class MainViewModel(
     fun deleteClient(clientId: String) {
         viewModelScope.launch {
             projectRepository.deleteClient(clientId)
+        }
+    }
+
+    // Invoice Operations
+    fun addOrUpdateInvoice(invoice: Invoice) {
+        viewModelScope.launch {
+            projectRepository.saveInvoice(invoice)
+        }
+    }
+
+    fun deleteInvoice(invoiceId: String) {
+        viewModelScope.launch {
+            projectRepository.deleteInvoice(invoiceId)
         }
     }
 

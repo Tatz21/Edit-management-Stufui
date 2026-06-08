@@ -252,15 +252,15 @@ fun ProjectItemCard(
     // Group status to display-friendly grouped label and color mapping
     val displayStatus = when (project.status) {
         "New", "Assigned", "Editing" -> "In Progress"
-        "Preview Sent", "Revision" -> "Under Review"
-        "Final Delivery", "Completed" -> "Completed"
+        "Preview Sent", "Revision" -> "Review"
+        "Final Delivery", "Completed" -> "Finalized"
         else -> "On Hold"
     }
     
     val statusColor = when (displayStatus) {
         "In Progress" -> StatusEditing
-        "Under Review" -> StatusPreviewSent
-        "Completed" -> StatusCompleted
+        "Review" -> StatusPreviewSent
+        "Finalized" -> StatusCompleted
         else -> StatusOnHold
     }
 
@@ -339,7 +339,7 @@ fun ProjectItemCard(
             ) {
                 // Deadline and Days left
                 Column {
-                    Text(text = "Deadline", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                    Text(text = "Est. Completion", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ResizedIcon(imageVector = Icons.Default.CalendarToday, contentDescription = null, size = 12.dp, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         Spacer(modifier = Modifier.width(4.dp))

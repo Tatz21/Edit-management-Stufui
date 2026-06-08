@@ -1046,7 +1046,7 @@ fun ActiveProjectRowItem(
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
-                        text = formatDateLabel(project.deadlineDate),
+                        text = "Est: ${formatDateLabel(project.deadlineDate)}",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (isOverdue) FontWeight.Bold else FontWeight.Normal,
                         color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
@@ -1077,8 +1077,8 @@ private data class StatusTheme(val bg: Color, val text: Color)
 private fun getDisplayStatus(status: String): String {
     return when (status) {
         "New", "Assigned", "Editing" -> "In Progress"
-        "Preview Sent", "Revision" -> "Under Review"
-        "Final Delivery", "Completed" -> "Completed"
+        "Preview Sent", "Revision" -> "Review"
+        "Final Delivery", "Completed" -> "Finalized"
         else -> "On Hold"
     }
 }
@@ -1089,11 +1089,11 @@ private fun getDisplayStatusThemeColors(displayStatus: String, isDark: Boolean):
             bg = if (isDark) Color(0xFFF59E0B).copy(alpha = 0.15f) else Color(0xFFFEF3C7),
             text = if (isDark) Color(0xFFFBBF24) else Color(0xFFB45309)
         )
-        "Under Review" -> StatusTheme(
+        "Review" -> StatusTheme(
             bg = if (isDark) Color(0xFF0EA5E9).copy(alpha = 0.15f) else Color(0xFFE0F2FE),
             text = if (isDark) Color(0xFF38BDF8) else Color(0xFF0369A1)
         )
-        "Completed" -> StatusTheme(
+        "Finalized" -> StatusTheme(
             bg = if (isDark) Color(0xFF10B981).copy(alpha = 0.15f) else Color(0xFFD1FAE5),
             text = if (isDark) Color(0xFF34D399) else Color(0xFF047857)
         )

@@ -4,8 +4,10 @@ import android.content.Context
 import android.util.Log
 import com.example.data.local.ProjectDao
 import com.example.data.local.ClientDao
+import com.example.data.local.InvoiceDao
 import com.example.domain.model.Project
 import com.example.domain.model.Client
+import com.example.domain.model.Invoice
 import com.example.domain.repository.ProjectRepository
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
@@ -20,6 +22,7 @@ import kotlinx.coroutines.tasks.await
 class ProjectRepositoryImpl(
     private val projectDao: ProjectDao,
     private val clientDao: ClientDao,
+    private val invoiceDao: InvoiceDao,
     private val context: Context
 ) : ProjectRepository {
 
@@ -74,5 +77,17 @@ class ProjectRepositoryImpl(
 
     override suspend fun deleteClient(clientId: String) {
         clientDao.deleteClient(clientId)
+    }
+
+    override fun getInvoices(): Flow<List<Invoice>> {
+        return invoiceDao.getAllInvoicesFlow()
+    }
+
+    override suspend fun saveInvoice(invoice: Invoice) {
+        invoiceDao.insertInvoice(invoice)
+    }
+
+    override suspend fun deleteInvoice(invoiceId: String) {
+        invoiceDao.deleteInvoice(invoiceId)
     }
 }

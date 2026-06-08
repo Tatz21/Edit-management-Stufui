@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.Client
+import com.example.domain.model.Project
 import com.example.presentation.MainViewModel
 import java.util.*
 
@@ -36,6 +37,7 @@ fun ClientDirectoryScreen(
     modifier: Modifier = Modifier
 ) {
     val clients by viewModel.clients.collectAsState()
+    val projects by viewModel.projects.collectAsState()
     val isDark by viewModel.isDarkTheme.collectAsState()
     val context = LocalContext.current
 
@@ -269,8 +271,15 @@ fun ClientDirectoryScreen(
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
                     items(filteredClients, key = { it.clientId }) { client ->
+                        val clientProjects = remember(projects, client) {
+                            projects.filter {
+                                (client.email.isNotEmpty() && it.clientEmail.equals(client.email, ignoreCase = true)) ||
+                                        it.clientName.equals(client.name, ignoreCase = true)
+                            }
+                        }
                         ClientRowItem(
                             client = client,
+                            clientProjects = clientProjects,
                             isDark = isDark,
                             onDelete = { viewModel.deleteClient(client.clientId) },
                             onCall = { phone ->
@@ -464,6 +473,7 @@ fun ClientDirectoryScreen(
 @Composable
 fun ClientRowItem(
     client: Client,
+    clientProjects: List<Project>,
     isDark: Boolean,
     onDelete: () -> Unit,
     onCall: (String) -> Unit,
@@ -670,6 +680,111 @@ fun ClientRowItem(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(16.dp)
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (clientProjects.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.05f))
+                
+                var isExpanded by remember { mutableStateOf(false) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isExpanded = !isExpanded }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Linked Projects (${clientProjects.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = "Toggle project details",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    
+                    if (isExpanded) {
+                        clientProjects.forEach { project ->
+                            val displayStatus = when (project.status) {
+                                "New", "Assigned", "Editing" -> "In Progress"
+                                "Preview Sent", "Revision" -> "Review"
+                                "Final Delivery", "Completed" -> "Finalized"
+                                else -> "On Hold"
+                            }
+                            val statusColor = when (displayStatus) {
+                                "In Progress" -> Color(0xFFF59E0B)
+                                "Review" -> Color(0xFF0EA5E9)
+                                "Finalized" -> Color(0xFF10B981)
+                                else -> Color(0xFF94A3B8)
+                            }
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = project.projectTitle,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "Est. Completion: ${project.deadlineDate}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier
+                                        .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(100.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(statusColor, RoundedCornerShape(50.dp))
+                                    )
+                                    Text(
+                                        text = displayStatus,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = statusColor
+                                    )
+                                }
                             }
                         }
                     }

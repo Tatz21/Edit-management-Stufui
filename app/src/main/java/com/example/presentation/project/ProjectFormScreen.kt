@@ -1,5 +1,6 @@
 package com.example.presentation.project
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,6 +9,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ContactMail
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -118,6 +121,55 @@ fun ProjectFormScreen(
             
             // Client section Card
             Text("Client Information", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+
+            val clients by viewModel.clients.collectAsState()
+            if (clients.isNotEmpty()) {
+                var showClientDropdown by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = if (clientName.isEmpty()) "Select Existing Profile..." else "Profile: $clientName",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Select Registered Client Profile (Optional)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showClientDropdown = true },
+                        leadingIcon = { Icon(Icons.Default.ContactMail, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                        trailingIcon = {
+                            IconButton(onClick = { showClientDropdown = !showClientDropdown }) {
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    
+                    DropdownMenu(
+                        expanded = showClientDropdown,
+                        onDismissRequest = { showClientDropdown = false },
+                        modifier = Modifier.fillMaxWidth(0.9f)
+                    ) {
+                        clients.forEach { client ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(client.name, fontWeight = FontWeight.Bold)
+                                        if (client.email.isNotEmpty()) {
+                                            Text(client.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    clientName = client.name
+                                    clientPhone = client.phone
+                                    clientEmail = client.email
+                                    showClientDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = clientName,
                 onValueChange = { clientName = it },

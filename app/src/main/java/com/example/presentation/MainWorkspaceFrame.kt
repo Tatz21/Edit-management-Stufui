@@ -24,7 +24,7 @@ import com.example.presentation.project.ProjectFormScreen
 import com.example.presentation.project.ProjectListScreen
 import com.example.presentation.reports.ReportsScreen
 import com.example.presentation.settings.SettingsScreen
-import com.example.presentation.clients.ClientDirectoryScreen
+import com.example.presentation.clients.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +62,7 @@ fun MainWorkspaceFrame(
                 NavItem("kanban", "Kanban", Icons.Default.ViewKanban, "Drag-and-drop workflow status boards"),
                 NavItem("editors", "Editors", Icons.Default.People, "Manage editing team and workload balance"),
                 NavItem("clients", "Clients", Icons.Default.ContactMail, "Manage client registry profiles and payments"),
+                NavItem("payments", "Payments", Icons.Default.Payments, "Track billing, invoices, and earnings records"),
                 NavItem("reports", "Reports", Icons.Default.Assessment, "Analyze monthly revenues and outputs"),
                 NavItem("settings", "Settings", Icons.Default.Settings, "Theme preferences, cloud sync, and backup tools")
             )
@@ -131,7 +132,7 @@ fun MainWorkspaceFrame(
                                     }
 
                                     // 2. Fifth item is the sliding "More" action
-                                    val isSecondaryActive = currentScreenRoute in listOf("reports", "settings")
+                                    val isSecondaryActive = currentScreenRoute in listOf("reports", "settings", "payments")
                                     NavigationBarItem(
                                         selected = isSecondaryActive,
                                         onClick = { showMoreBottomSheet = true },
@@ -201,6 +202,9 @@ fun MainWorkspaceFrame(
                                     }
                                 )
                                 "clients" -> ClientDirectoryScreen(
+                                    viewModel = viewModel
+                                )
+                                "payments" -> PaymentManagementScreen(
                                     viewModel = viewModel
                                 )
                                 "editors" -> EditorScreen(

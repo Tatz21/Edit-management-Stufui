@@ -26,6 +26,7 @@ object ServiceLocator {
             val repo = ProjectRepositoryImpl(
                 projectDao = db.projectDao(),
                 clientDao = db.clientDao(),
+                invoiceDao = db.invoiceDao(),
                 context = context.applicationContext
             )
             projectRepository = repo
