@@ -3,9 +3,11 @@ package com.example.presentation.project
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -86,6 +88,17 @@ fun ProjectListScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
+        var viewMode by remember { mutableStateOf("table") } // Default to "table" tracker view mode
+        var activeOnlyFilter by remember { mutableStateOf(true) } // Default to tracking active projects
+
+        val displayedProjects = remember(projects, activeOnlyFilter) {
+            if (activeOnlyFilter) {
+                projects.filter { it.status != "Completed" && it.status != "Final Delivery" }
+            } else {
+                projects
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -110,10 +123,112 @@ fun ProjectListScreen(
                 )
             )
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Quick display of active tags
-            if (projects.isEmpty()) {
+            // Control & Toggles Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left side: Active only filter chips with Material 3 polish
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = activeOnlyFilter,
+                        onClick = { activeOnlyFilter = true },
+                        label = { Text("Active Pipe", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                    FilterChip(
+                        selected = !activeOnlyFilter,
+                        onClick = { activeOnlyFilter = false },
+                        label = { Text("All Archive", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                }
+
+                // Right side: Custom Segmented switcher (List vs Table)
+                Row(
+                    modifier = Modifier
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val activeBg = MaterialTheme.colorScheme.primary
+                    val activeContent = MaterialTheme.colorScheme.onPrimary
+                    val inactiveBg = Color.Transparent
+                    val inactiveContent = MaterialTheme.colorScheme.onSurfaceVariant
+
+                    // Cards (List) Mode
+                    Row(
+                        modifier = Modifier
+                            .background(
+                                color = if (viewMode == "list") activeBg else inactiveBg,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .clickable { viewMode = "list" }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.GridView,
+                            contentDescription = "Card layout",
+                            tint = if (viewMode == "list") activeContent else inactiveContent,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "Cards",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (viewMode == "list") activeContent else inactiveContent
+                        )
+                    }
+
+                    // Table Mode
+                    Row(
+                        modifier = Modifier
+                            .background(
+                                color = if (viewMode == "table") activeBg else inactiveBg,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .clickable { viewMode = "table" }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TableChart,
+                            contentDescription = "Table tracking",
+                            tint = if (viewMode == "table") activeContent else inactiveContent,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "Table",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (viewMode == "table") activeContent else inactiveContent
+                        )
+                    }
+                }
+            }
+
+            // Quick display of active tags / Empty states
+            if (displayedProjects.isEmpty()) {
                 // Empty state page
                 Box(
                     modifier = Modifier
@@ -124,21 +239,110 @@ fun ProjectListScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         ResizedIcon(imageVector = Icons.Default.FolderOpen, contentDescription = null, size = 64.dp, tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f))
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("No projects match filters", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-                        Text("Create one using the FAB (+ button) below.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f))
+                        Text(
+                            text = if (activeOnlyFilter) "No active projects" else "No matching projects",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = if (activeOnlyFilter) "All pipelines are completed! Switch to All Archive to view." else "Create one using the FAB (+ button) below.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+                        )
                     }
                 }
             } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    items(projects, key = { it.projectId }) { proj ->
-                        ProjectItemCard(
-                            project = proj,
-                            onClick = { onNavigateToProjectDetails(proj.projectId) }
-                        )
+                if (viewMode == "list") {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 80.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(displayedProjects, key = { it.projectId }) { proj ->
+                            ProjectItemCard(
+                                project = proj,
+                                onClick = { onNavigateToProjectDetails(proj.projectId) }
+                            )
+                        }
+                    }
+                } else {
+                    // Modern responsive tracker table (Horizontally scrollable on small screens, neatly scaling layout)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        val tableScrollState = rememberScrollState()
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 64.dp)
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), RoundedCornerShape(16.dp)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(tableScrollState)
+                            ) {
+                                // Table Header row
+                                Row(
+                                    modifier = Modifier
+                                        .widthIn(min = 600.dp)
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Project / Client",
+                                        modifier = Modifier.weight(3.5f),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Workflow Status",
+                                        modifier = Modifier.weight(2.5f),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Deadline Date",
+                                        modifier = Modifier.weight(2.5f),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Assigned Editor",
+                                        modifier = Modifier.weight(2.5f),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                                
+                                // Table Row elements
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .widthIn(min = 600.dp)
+                                        .fillMaxWidth()
+                                ) {
+                                    items(displayedProjects, key = { it.projectId }) { proj ->
+                                        ProjectTableRow(
+                                            project = proj,
+                                            onClick = { onNavigateToProjectDetails(proj.projectId) }
+                                        )
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.05f))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -417,4 +621,120 @@ fun ResizedIcon(imageVector: androidx.compose.ui.graphics.vector.ImageVector, co
         modifier = Modifier.size(size),
         tint = tint
     )
+}
+
+// Elegant responsive project tracker table row
+@Composable
+fun ProjectTableRow(
+    project: Project,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val displayStatus = when (project.status) {
+        "New", "Assigned", "Editing" -> "In Progress"
+        "Preview Sent", "Revision" -> "Review"
+        "Final Delivery", "Completed" -> "Finalized"
+        else -> "On Hold"
+    }
+    
+    val statusColor = when (displayStatus) {
+        "In Progress" -> StatusEditing
+        "Review" -> StatusPreviewSent
+        "Finalized" -> StatusCompleted
+        else -> StatusOnHold
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 1. Title and Client Details
+        Column(modifier = Modifier.weight(3.5f)) {
+            Text(
+                text = project.projectTitle,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = project.clientName,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        // 2. Status Badge representation
+        Box(modifier = Modifier.weight(2.5f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .background(statusColor.copy(alpha = 0.12f), RoundedCornerShape(100.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(statusColor, RoundedCornerShape(50.dp))
+                )
+                Text(
+                    text = displayStatus,
+                    color = statusColor,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+
+        // 3. Deadline Date with calendar icon
+        Row(
+            modifier = Modifier.weight(2.5f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.CalendarToday,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            )
+            Text(
+                text = project.deadlineDate,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // 4. Assigned Editor with person icon
+        Row(
+            modifier = Modifier.weight(2.5f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            )
+            Text(
+                text = project.assignedEditor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }
