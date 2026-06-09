@@ -21,6 +21,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 import com.example.domain.model.Project
 import com.example.presentation.MainViewModel
 import com.example.ui.theme.*
@@ -419,7 +423,7 @@ fun ProjectListScreen(
                                 // Table Header row
                                 Row(
                                     modifier = Modifier
-                                        .widthIn(min = 600.dp)
+                                        .widthIn(min = 750.dp)
                                         .fillMaxWidth()
                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
                                         .padding(vertical = 12.dp, horizontal = 16.dp),
@@ -427,28 +431,35 @@ fun ProjectListScreen(
                                 ) {
                                     Text(
                                         text = "Project / Client",
-                                        modifier = Modifier.weight(3.5f),
+                                        modifier = Modifier.weight(3.0f),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
                                         text = "Workflow Status",
-                                        modifier = Modifier.weight(2.5f),
+                                        modifier = Modifier.weight(2.0f),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = "Deadline Date",
-                                        modifier = Modifier.weight(2.5f),
+                                        text = "Timeline Gap",
+                                        modifier = Modifier.weight(2.8f),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Completion Tracker",
+                                        modifier = Modifier.weight(2.2f),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
                                         text = "Assigned Editor",
-                                        modifier = Modifier.weight(2.5f),
+                                        modifier = Modifier.weight(2.0f),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -460,7 +471,7 @@ fun ProjectListScreen(
                                 // Table Row elements
                                 LazyColumn(
                                     modifier = Modifier
-                                        .widthIn(min = 600.dp)
+                                        .widthIn(min = 750.dp)
                                         .fillMaxWidth()
                                 ) {
                                     items(displayedProjects, key = { it.projectId }) { proj ->
@@ -662,6 +673,116 @@ fun ProjectItemCard(
                 )
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+            
+            // NEW Delivery & Timeline Tracking Block
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // 1st: Progress Gauge for Completion Status
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "PRODUCTION",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            letterSpacing = 0.8.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(54.dp)) {
+                            val completion = getCompletionProgress(project.status)
+                            CircularProgressIndicator(
+                                progress = { completion },
+                                modifier = Modifier.fillMaxSize(),
+                                color = statusColor,
+                                strokeWidth = 5.dp,
+                                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                            )
+                            Text(
+                                text = "${(completion * 100).toInt()}%",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = displayStatus,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor
+                        )
+                    }
+
+                    // Divider separator line
+                    Box(
+                        modifier = Modifier
+                            .height(50.dp)
+                            .width(1.dp)
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    )
+
+                    // 2nd: Progress Gauge for Deadline Time Consumed / Days Left
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        val dlInfo = getDeadlineProximity(project.startDate, project.deadlineDate)
+                        
+                        Text(
+                            text = "TIMELINE GAP",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            letterSpacing = 0.8.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(54.dp)) {
+                            val timeConsumed = dlInfo.ratio
+                            val timelineColor = when {
+                                dlInfo.isOverdue -> MaterialTheme.colorScheme.error
+                                dlInfo.daysRemaining <= 2 -> PriorityHigh // Red/orange for hot deadlines
+                                else -> MaterialTheme.colorScheme.primary
+                            }
+                            CircularProgressIndicator(
+                                progress = { timeConsumed },
+                                modifier = Modifier.fillMaxSize(),
+                                color = timelineColor,
+                                strokeWidth = 5.dp,
+                                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                            )
+                            Icon(
+                                imageVector = if (dlInfo.isOverdue) Icons.Default.Warning else Icons.Default.HourglassEmpty,
+                                contentDescription = null,
+                                tint = timelineColor.copy(alpha = 0.65f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = dlInfo.label,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (dlInfo.isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
             Spacer(modifier = Modifier.height(12.dp))
@@ -782,7 +903,7 @@ fun ProjectTableRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 1. Title and Client Details
-        Column(modifier = Modifier.weight(3.5f)) {
+        Column(modifier = Modifier.weight(3.0f)) {
             Text(
                 text = project.projectTitle,
                 fontSize = 14.sp,
@@ -803,7 +924,7 @@ fun ProjectTableRow(
         }
 
         // 2. Status Badge representation
-        Box(modifier = Modifier.weight(2.5f)) {
+        Box(modifier = Modifier.weight(2.0f)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -825,29 +946,81 @@ fun ProjectTableRow(
             }
         }
 
-        // 3. Deadline Date with calendar icon
-        Row(
-            modifier = Modifier.weight(2.5f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        // 3. Timeline Gap with days left and mini visual timeline progress bar
+        val dlInfo = getDeadlineProximity(project.startDate, project.deadlineDate)
+        val timelineColor = when {
+            dlInfo.isOverdue -> MaterialTheme.colorScheme.error
+            dlInfo.daysRemaining <= 2 -> PriorityHigh
+            else -> MaterialTheme.colorScheme.primary
+        }
+        Column(
+            modifier = Modifier.weight(2.8f).padding(end = 8.dp),
+            verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.CalendarToday,
-                contentDescription = null,
-                modifier = Modifier.size(12.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-            )
-            Text(
-                text = project.deadlineDate,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = if (dlInfo.isOverdue) Icons.Default.Warning else Icons.Default.CalendarToday,
+                    contentDescription = null,
+                    modifier = Modifier.size(11.dp),
+                    tint = timelineColor
+                )
+                Text(
+                    text = dlInfo.label,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (dlInfo.isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { dlInfo.ratio },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp),
+                color = timelineColor,
+                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
             )
         }
 
-        // 4. Assigned Editor with person icon
+        // 4. Progress Tracker Completion Status
+        val completion = getCompletionProgress(project.status)
+        Column(
+            modifier = Modifier.weight(2.2f).padding(end = 8.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "${(completion * 100).toInt()}% Done",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { completion },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp),
+                color = statusColor,
+                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+        }
+
+        // 5. Assigned Editor with person icon
         Row(
-            modifier = Modifier.weight(2.5f),
+            modifier = Modifier.weight(2.0f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -866,5 +1039,73 @@ fun ProjectTableRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+// Global visual helpers for computing progress metrics
+fun getDeadlineProximity(startDateStr: String, deadlineDateStr: String): DeadlineInfo {
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val now = Date()
+    
+    val start = try {
+        if (startDateStr.isNotBlank()) formatter.parse(startDateStr) else null
+    } catch (e: Exception) {
+        null
+    }
+    
+    val deadline = try {
+        if (deadlineDateStr.isNotBlank()) formatter.parse(deadlineDateStr) else null
+    } catch (e: Exception) {
+        null
+    }
+    
+    if (deadline == null) {
+        return DeadlineInfo(ratio = 0f, daysRemaining = 0, isOverdue = false, label = "No Deadline")
+    }
+    
+    val nowMs = now.time
+    val deadlineMs = deadline.time
+    val startMs = start?.time ?: (deadlineMs - 7 * 24 * 60 * 60 * 1000L) // Default 7 days duration if start date is missing
+    
+    val totalDurationMs = deadlineMs - startMs
+    val elapsedMs = nowMs - startMs
+    
+    val ratio = if (totalDurationMs > 0) {
+        (elapsedMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    
+    val diffMs = deadlineMs - nowMs
+    val daysRemaining = TimeUnit.MILLISECONDS.toDays(diffMs).toInt()
+    val isOverdue = diffMs < 0
+    
+    val label = when {
+        isOverdue -> "Overdue by ${-daysRemaining}d"
+        daysRemaining == 0 -> "Due today!"
+        daysRemaining == 1 -> "1 day left"
+        else -> "$daysRemaining days left"
+    }
+    
+    return DeadlineInfo(ratio, daysRemaining, isOverdue, label)
+}
+
+data class DeadlineInfo(
+    val ratio: Float, // 0.0f to 1.0f (representing percentage of timeline consumed)
+    val daysRemaining: Int,
+    val isOverdue: Boolean,
+    val label: String
+)
+
+fun getCompletionProgress(status: String): Float {
+    return when (status) {
+        "New" -> 0.10f
+        "Assigned" -> 0.25f
+        "Editing" -> 0.50f
+        "Preview Sent" -> 0.75f
+        "Revision" -> 0.85f
+        "Final Delivery" -> 0.95f
+        "Completed" -> 1.00f
+        else -> 0.00f // "On Hold"
     }
 }
