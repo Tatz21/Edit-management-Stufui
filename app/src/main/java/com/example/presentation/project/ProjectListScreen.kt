@@ -90,12 +90,26 @@ fun ProjectListScreen(
     ) { paddingValues ->
         var viewMode by remember { mutableStateOf("table") } // Default to "table" tracker view mode
         var activeOnlyFilter by remember { mutableStateOf(true) } // Default to tracking active projects
+        var selectedStatusFilter by remember { mutableStateOf("All Statuses") }
 
-        val displayedProjects = remember(projects, activeOnlyFilter) {
-            if (activeOnlyFilter) {
+        val displayedProjects = remember(projects, activeOnlyFilter, selectedStatusFilter) {
+            val baseList = if (activeOnlyFilter) {
                 projects.filter { it.status != "Completed" && it.status != "Final Delivery" }
             } else {
                 projects
+            }
+            if (selectedStatusFilter == "All Statuses") {
+                baseList
+            } else {
+                baseList.filter { proj ->
+                    val projDisplayStatus = when (proj.status) {
+                        "New", "Assigned", "Editing" -> "In Progress"
+                        "Preview Sent", "Revision" -> "Review"
+                        "Final Delivery", "Completed" -> "Completed"
+                        else -> "On Hold"
+                    }
+                    projDisplayStatus == selectedStatusFilter
+                }
             }
         }
 
@@ -223,6 +237,122 @@ fun ProjectListScreen(
                             fontWeight = FontWeight.Bold,
                             color = if (viewMode == "table") activeContent else inactiveContent
                         )
+                    }
+                }
+            }
+            
+            // Dropdown filter for project statuses: In Progress, Review, Completed, On Hold
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                var expanded by remember { mutableStateOf(false) }
+                val statuses = listOf("All Statuses", "In Progress", "Review", "Completed", "On Hold")
+
+                Box(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        onClick = { expanded = !expanded },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FilterAlt,
+                                    contentDescription = "Status filter",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Status: $selectedStatusFilter",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.fillMaxWidth(0.55f)
+                    ) {
+                        statuses.forEach { statusOption ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (statusOption != "All Statuses") {
+                                            val statusColor = when (statusOption) {
+                                                "In Progress" -> StatusEditing
+                                                "Review" -> StatusPreviewSent
+                                                "Completed" -> StatusCompleted
+                                                else -> StatusOnHold
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .background(statusColor, RoundedCornerShape(50.dp))
+                                            )
+                                        }
+                                        Text(statusOption, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    }
+                                },
+                                onClick = {
+                                    selectedStatusFilter = statusOption
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                if (selectedStatusFilter != "All Statuses") {
+                    Surface(
+                        onClick = { selectedStatusFilter = "All Statuses" },
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("Clear", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear Status Filter",
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -457,14 +587,14 @@ fun ProjectItemCard(
     val displayStatus = when (project.status) {
         "New", "Assigned", "Editing" -> "In Progress"
         "Preview Sent", "Revision" -> "Review"
-        "Final Delivery", "Completed" -> "Finalized"
+        "Final Delivery", "Completed" -> "Completed"
         else -> "On Hold"
     }
     
     val statusColor = when (displayStatus) {
         "In Progress" -> StatusEditing
         "Review" -> StatusPreviewSent
-        "Finalized" -> StatusCompleted
+        "Completed" -> StatusCompleted
         else -> StatusOnHold
     }
 
@@ -633,14 +763,14 @@ fun ProjectTableRow(
     val displayStatus = when (project.status) {
         "New", "Assigned", "Editing" -> "In Progress"
         "Preview Sent", "Revision" -> "Review"
-        "Final Delivery", "Completed" -> "Finalized"
+        "Final Delivery", "Completed" -> "Completed"
         else -> "On Hold"
     }
     
     val statusColor = when (displayStatus) {
         "In Progress" -> StatusEditing
         "Review" -> StatusPreviewSent
-        "Finalized" -> StatusCompleted
+        "Completed" -> StatusCompleted
         else -> StatusOnHold
     }
 
