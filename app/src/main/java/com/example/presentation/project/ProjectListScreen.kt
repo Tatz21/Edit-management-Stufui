@@ -49,6 +49,7 @@ fun ProjectListScreen(
     val selectedSortValue by viewModel.sortType.collectAsState()
 
     var showFiltersDialog by remember { mutableStateOf(false) }
+    var selectedProjectForNotes by remember { mutableStateOf<Project?>(null) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -395,7 +396,8 @@ fun ProjectListScreen(
                         items(displayedProjects, key = { it.projectId }) { proj ->
                             ProjectItemCard(
                                 project = proj,
-                                onClick = { onNavigateToProjectDetails(proj.projectId) }
+                                onClick = { onNavigateToProjectDetails(proj.projectId) },
+                                onOpenNotes = { selectedProjectForNotes = proj }
                             )
                         }
                     }
@@ -459,7 +461,14 @@ fun ProjectListScreen(
                                     )
                                     Text(
                                         text = "Assigned Editor",
-                                        modifier = Modifier.weight(2.0f),
+                                        modifier = Modifier.weight(1.8f),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Quick Notes",
+                                        modifier = Modifier.weight(1.2f),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -477,7 +486,8 @@ fun ProjectListScreen(
                                     items(displayedProjects, key = { it.projectId }) { proj ->
                                         ProjectTableRow(
                                             project = proj,
-                                            onClick = { onNavigateToProjectDetails(proj.projectId) }
+                                            onClick = { onNavigateToProjectDetails(proj.projectId) },
+                                            onOpenNotes = { selectedProjectForNotes = proj }
                                         )
                                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.05f))
                                     }
@@ -547,6 +557,24 @@ fun ProjectListScreen(
             }
         )
     }
+
+    if (selectedProjectForNotes != null) {
+        ModalBottomSheet(
+            onDismissRequest = { selectedProjectForNotes = null },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            ProjectNotesSheetContent(
+                project = selectedProjectForNotes!!,
+                onDismiss = { selectedProjectForNotes = null },
+                onSaveNotes = { newNotes ->
+                    viewModel.updateNotes(selectedProjectForNotes!!.projectId, newNotes)
+                    selectedProjectForNotes = null
+                }
+            )
+        }
+    }
 }
 
 // Reuseable custom dropdown style for pristine form selects
@@ -590,6 +618,7 @@ fun CustomDropdownSelector(
 fun ProjectItemCard(
     project: Project,
     onClick: () -> Unit,
+    onOpenNotes: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val progress = if (project.totalAmount > 0) (project.advanceAmount / project.totalAmount).toFloat().coerceIn(0f, 1f) else 0f
@@ -859,6 +888,42 @@ fun ProjectItemCard(
                 trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
                 strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // PM Actions Quick Notes Button
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                OutlinedButton(
+                    onClick = { onOpenNotes() },
+                    modifier = Modifier.testTag("notes_quick_btn_${project.projectId}").height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (project.notes.isNotBlank()) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (project.notes.isNotBlank()) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f) else Color.Transparent
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Quick Notes",
+                        modifier = Modifier.size(13.dp),
+                        tint = if (project.notes.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (project.notes.isNotBlank()) "PM Notes (Active)" else "PM Notes",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (project.notes.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
@@ -879,6 +944,7 @@ fun ResizedIcon(imageVector: androidx.compose.ui.graphics.vector.ImageVector, co
 fun ProjectTableRow(
     project: Project,
     onClick: () -> Unit,
+    onOpenNotes: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val displayStatus = when (project.status) {
@@ -1020,7 +1086,7 @@ fun ProjectTableRow(
 
         // 5. Assigned Editor with person icon
         Row(
-            modifier = Modifier.weight(2.0f),
+            modifier = Modifier.weight(1.8f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -1038,6 +1104,24 @@ fun ProjectTableRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+
+        // 6. Quick Note actionable icon
+        Box(
+            modifier = Modifier.weight(1.2f),
+            contentAlignment = Alignment.Center
+        ) {
+            IconButton(
+                onClick = onOpenNotes,
+                modifier = Modifier.size(28.dp).testTag("notes_quick_row_${project.projectId}")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Quick Notes",
+                    tint = if (project.notes.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }
@@ -1107,5 +1191,230 @@ fun getCompletionProgress(status: String): Float {
         "Final Delivery" -> 0.95f
         "Completed" -> 1.00f
         else -> 0.00f // "On Hold"
+    }
+}
+
+@Composable
+fun ProjectNotesSheetContent(
+    project: Project,
+    onDismiss: () -> Unit,
+    onSaveNotes: (String) -> Unit
+) {
+    var notesText by remember { mutableStateOf(project.notes) }
+    
+    // Quick tags for feedback / notes templates
+    val templateTags = listOf(
+        "Client loved the preview!",
+        "Revision requested on audio mix",
+        "Awaiting high-res assets",
+        "Colors grading requested",
+        "Call scheduled with PM",
+        "Project paused"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Column {
+                    Text(
+                        text = "Meeting Notes & Feedback",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${project.projectTitle} • ${project.clientName}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Small Context pill row (status, assigned editor, priority)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.height(28.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = project.assignedEditor.ifBlank { "Unassigned" },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.height(28.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val statusColor = when (project.status) {
+                        "New", "Assigned", "Editing" -> StatusEditing
+                        "Preview Sent", "Revision" -> StatusPreviewSent
+                        "Final Delivery", "Completed" -> StatusCompleted
+                        else -> StatusOnHold
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(statusColor, RoundedCornerShape(100.dp))
+                    )
+                    Text(
+                        text = project.status,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // Notes Notepad Text Field with nice Material 3 borders
+        OutlinedTextField(
+            value = notesText,
+            onValueChange = { notesText = it },
+            placeholder = { Text("Jot down quick client feedback, meeting agreements, or editor instructions here...", fontSize = 14.sp) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .testTag("notes_input_field"),
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
+            ),
+            singleLine = false
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Add Timestamp shortcut
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Meeting Templates",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            
+            TextButton(
+                onClick = {
+                    val formattedStamp = String.format(
+                        Locale.getDefault(), 
+                        "\n\n[Meeting Note - %s]: ", 
+                        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+                    )
+                    notesText += formattedStamp
+                },
+                modifier = Modifier.height(30.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) {
+                Icon(imageVector = Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Insert Timestamp", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // Quick tags suggestion chip row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            templateTags.forEach { tagText ->
+                SuggestionChip(
+                    onClick = {
+                        val formattedTag = if (notesText.isBlank()) tagText else if (notesText.endsWith("\n") || notesText.endsWith(": ")) tagText else "\n• $tagText"
+                        notesText += formattedTag
+                    },
+                    label = { Text(tagText, fontSize = 11.sp) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Saving action triggers
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Cancel", fontWeight = FontWeight.SemiBold)
+            }
+            Button(
+                onClick = { onSaveNotes(notesText) },
+                modifier = Modifier.weight(1f).height(48.dp).testTag("save_notes_button"),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text("Save Notes", fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
     }
 }
