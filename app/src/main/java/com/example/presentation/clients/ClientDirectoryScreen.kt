@@ -6,6 +6,9 @@ import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,6 +37,7 @@ import java.util.*
 @Composable
 fun ClientDirectoryScreen(
     viewModel: MainViewModel,
+    onNavigateToProjectDetails: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val clients by viewModel.clients.collectAsState()
@@ -44,6 +48,7 @@ fun ClientDirectoryScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilterStatus by remember { mutableStateOf("All") }
     var showAddDialog by remember { mutableStateOf(false) }
+    var selectedClientForDetail by remember { mutableStateOf<Client?>(null) }
 
     // Dialog state
     var clientName by remember { mutableStateOf("") }
@@ -299,7 +304,8 @@ fun ClientDirectoryScreen(
                                 } catch (e: Exception) {
                                     Toast.makeText(context, "No email client available.", Toast.LENGTH_SHORT).show()
                                 }
-                            }
+                            },
+                            onViewDetail = { selectedClientForDetail = client }
                         )
                     }
                 }
@@ -468,6 +474,623 @@ fun ClientDirectoryScreen(
             }
         )
     }
+
+    if (selectedClientForDetail != null) {
+        val detailProjects = remember(projects, selectedClientForDetail) {
+            projects.filter {
+                (selectedClientForDetail!!.email.isNotEmpty() && it.clientEmail.equals(selectedClientForDetail!!.email, ignoreCase = true)) ||
+                        it.clientName.equals(selectedClientForDetail!!.name, ignoreCase = true)
+            }
+        }
+        ModalBottomSheet(
+            onDismissRequest = { selectedClientForDetail = null },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            ClientDetailSheetContent(
+                client = selectedClientForDetail!!,
+                clientProjects = detailProjects,
+                isDark = isDark,
+                onDismiss = { selectedClientForDetail = null },
+                onSaveProfile = { updatedClient ->
+                    viewModel.addOrUpdateClient(updatedClient)
+                    selectedClientForDetail = updatedClient
+                },
+                onNavigateToProjectDetails = { id ->
+                    selectedClientForDetail = null
+                    onNavigateToProjectDetails?.invoke(id)
+                },
+                onCall = { phone ->
+                    try {
+                        val dial = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+                        dial.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(dial)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Cannot dial. No dialer available.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onEmail = { email ->
+                    try {
+                        val mail = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email"))
+                        mail.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(mail)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "No email client available.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ClientDetailSheetContent(
+    client: Client,
+    clientProjects: List<Project>,
+    isDark: Boolean,
+    onDismiss: () -> Unit,
+    onSaveProfile: (Client) -> Unit,
+    onNavigateToProjectDetails: (String) -> Unit,
+    onCall: (String) -> Unit,
+    onEmail: (String) -> Unit
+) {
+    var activeTab by remember { mutableStateOf("Overview") }
+    val totalRevenue = remember(clientProjects) { clientProjects.sumOf { it.totalAmount } }
+    val totalRemaining = remember(clientProjects) { clientProjects.sumOf { it.remainingAmount } }
+    val totalPaid = remember(clientProjects, totalRevenue, totalRemaining) { (totalRevenue - totalRemaining).coerceAtLeast(0.0) }
+    
+    val activeCount = remember(clientProjects) {
+        clientProjects.count { it.status in listOf("New", "Assigned", "Editing", "Preview Sent", "Revision") }
+    }
+    val completedCount = remember(clientProjects) {
+        clientProjects.count { it.status in listOf("Final Delivery", "Completed") }
+    }
+
+    // Editing states for Overview Profile
+    var isEditing by remember { mutableStateOf(false) }
+    var editName by remember { mutableStateOf(client.name) }
+    var editEmail by remember { mutableStateOf(client.email) }
+    var editPhone by remember { mutableStateOf(client.phone) }
+    var editNotes by remember { mutableStateOf(client.notes) }
+    var editPaymentStatus by remember { mutableStateOf(client.paymentStatus) }
+    var showEditStatusDropdown by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.9f) // Occupies up to 90% of screen height
+            .navigationBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Circular initials avatar
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(14.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val initials = if (client.name.isNotBlank()) client.name.split(" ").mapNotNull { it.firstOrNull() }.take(2).joinToString("").uppercase() else ""
+                    Text(
+                        text = initials.ifBlank { "CL" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Column {
+                    Text(
+                        text = "Client Profile",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = client.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            IconButton(onClick = onDismiss, modifier = Modifier.testTag("client_detail_close_btn")) {
+                Icon(imageVector = Icons.Default.Close, contentDescription = "Close details")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Custom High-End Tab/Switcher row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(100.dp)
+                )
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val tabs = listOf("Overview", "Project Ledger")
+            tabs.forEach { tabName ->
+                val isSelected = activeTab == tabName
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            shape = RoundedCornerShape(100.dp)
+                        )
+                        .clickable { activeTab = tabName }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = tabName,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Tab contents
+        if (activeTab == "Overview") {
+            // Scrollable Profile Area
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Toggle between View vs Edit profile
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Contact Information",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            
+                            // Edit toggle button
+                            TextButton(
+                                onClick = {
+                                    if (isEditing) {
+                                        // Revert changes
+                                        editName = client.name
+                                        editEmail = client.email
+                                        editPhone = client.phone
+                                        editNotes = client.notes
+                                        editPaymentStatus = client.paymentStatus
+                                    }
+                                    isEditing = !isEditing
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isEditing) Icons.Default.Close else Icons.Default.Edit,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (isEditing) "Cancel" else "Edit Profile", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (!isEditing) {
+                            // Read-only beautiful presentation
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                // Name Row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text("Full Name", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(client.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                    }
+                                }
+
+                                // Phone Row
+                                if (client.phone.isNotBlank()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().clickable { onCall(client.phone) },
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Phone,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("Phone Details", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(client.phone, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                        }
+                                        IconButton(onClick = { onCall(client.phone) }, modifier = Modifier.size(36.dp)) {
+                                            Icon(Icons.Default.Call, contentDescription = "Dial", tint = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
+                                }
+
+                                // Email Row
+                                if (client.email.isNotBlank()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().clickable { onEmail(client.email) },
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Email,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("Email Contact", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(client.email, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                        }
+                                        IconButton(onClick = { onEmail(client.email) }, modifier = Modifier.size(36.dp)) {
+                                            Icon(Icons.Default.Mail, contentDescription = "Send Email", tint = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
+                                }
+
+                                // Payment Status Row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Payments,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text("Global Payment Status", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        val statusColors = getClientStatusColors(client.paymentStatus, isDark)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier
+                                                .background(statusColors.bg, RoundedCornerShape(100.dp))
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Box(modifier = Modifier.size(6.dp).background(statusColors.text, RoundedCornerShape(50.dp)))
+                                            Text(client.paymentStatus, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = statusColors.text)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Active edit forms
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedTextField(
+                                    value = editName,
+                                    onValueChange = { editName = it },
+                                    label = { Text("Client Name") },
+                                    modifier = Modifier.fillMaxWidth().testTag("edit_client_name"),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = editEmail,
+                                    onValueChange = { editEmail = it },
+                                    label = { Text("Email Contact") },
+                                    modifier = Modifier.fillMaxWidth().testTag("edit_client_email"),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = editPhone,
+                                    onValueChange = { editPhone = it },
+                                    label = { Text("Phone Contact") },
+                                    modifier = Modifier.fillMaxWidth().testTag("edit_client_phone"),
+                                    singleLine = true
+                                )
+
+                                // Dropdown selector for status
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedTextField(
+                                        value = editPaymentStatus,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Payment Status") },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("edit_client_status")
+                                            .clickable { showEditStatusDropdown = true },
+                                        trailingIcon = {
+                                            IconButton(onClick = { showEditStatusDropdown = !showEditStatusDropdown }) {
+                                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+                                            }
+                                        }
+                                    )
+
+                                    DropdownMenu(
+                                        expanded = showEditStatusDropdown,
+                                        onDismissRequest = { showEditStatusDropdown = false }
+                                    ) {
+                                        Client.PAYMENT_STATUS_OPTIONS.forEach { option ->
+                                            DropdownMenuItem(
+                                                text = { Text(option) },
+                                                onClick = {
+                                                    editPaymentStatus = option
+                                                    showEditStatusDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (editName.isBlank()) {
+                                            // Handle error
+                                        } else {
+                                            val updated = client.copy(
+                                                name = editName.trim(),
+                                                email = editEmail.trim(),
+                                                phone = editPhone.trim(),
+                                                notes = editNotes.trim(),
+                                                paymentStatus = editPaymentStatus
+                                            )
+                                            onSaveProfile(updated)
+                                            isEditing = false
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("save_client_edit_btn"),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Save Registry Changes", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Meeting Notes & Internal feedback Section
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Jot Client Notes & Feedback",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = editNotes,
+                        onValueChange = { editNotes = it },
+                        placeholder = { Text("Type here to save internal details regarding this client...", fontSize = 13.sp) },
+                        modifier = Modifier.fillMaxWidth().height(120.dp).testTag("edit_client_notes_field"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)
+                        )
+                    )
+
+                    // Quick Appending Suggestion Tags
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(androidx.compose.foundation.rememberScrollState())
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val feedbackTags = listOf(
+                            "VIP Client - High Priority",
+                            "Awaiting Asset Delivery",
+                            "Prefers WhatsApp Updates",
+                            "Requested Revision",
+                            "Awaiting Final Invoice"
+                        )
+                        feedbackTags.forEach { tagText ->
+                            SuggestionChip(
+                                onClick = {
+                                    val formattedTag = if (editNotes.isBlank()) tagText else if (editNotes.endsWith("\n") || editNotes.endsWith(" ")) tagText else "\n• $tagText"
+                                    editNotes += formattedTag
+                                },
+                                label = { Text(tagText, fontSize = 10.sp) }
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val updated = client.copy(notes = editNotes.trim())
+                            onSaveProfile(updated)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        modifier = Modifier.align(Alignment.End).testTag("save_client_notes_btn"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Save Memo", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        } else {
+            // Tab 2: Project Ledger & Pipeline History
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Statistics Summary Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Total Value
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("Total Paid", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("$%,.0f".format(Locale.US, totalPaid), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+
+                    // Remaining / Outstanding
+                    val outstandingColor = if (totalRemaining > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = outstandingColor.copy(alpha = 0.08f)),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, outstandingColor.copy(alpha = 0.15f))
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("Pending Bills", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("$%,.0f".format(Locale.US, totalRemaining), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp, color = outstandingColor)
+                        }
+                    }
+
+                    // Projects pipeline count
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("Projects Active", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("$activeCount / ${clientProjects.size}", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                        }
+                    }
+                }
+
+                // Project History List
+                Text(
+                    text = "Historical Pipeline & History (${clientProjects.size})",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (clientProjects.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                            Text("No projects recorded under this client profile.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(clientProjects, key = { it.projectId }) { proj ->
+                            val statusColor = when (proj.status) {
+                                "New", "Assigned", "Editing" -> Color(0xFFF59E0B)
+                                "Preview Sent", "Revision" -> Color(0xFF0EA5E9)
+                                "Final Delivery", "Completed" -> Color(0xFF10B981)
+                                else -> Color(0xFF94A3B8)
+                            }
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onNavigateToProjectDetails(proj.projectId) }
+                                    .testTag("ledger_proj_item_${proj.projectId}"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(proj.projectTitle, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("${proj.projectType} • Deadline: ${proj.deadlineDate}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        
+                                        // Simple Progress Indicators
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Surface(
+                                                color = statusColor.copy(alpha = 0.12f),
+                                                shape = RoundedCornerShape(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = proj.status,
+                                                    color = statusColor,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+
+                                            Text(
+                                                text = "Unpaid: $%,.0f".format(Locale.US, proj.remainingAmount),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (proj.remainingAmount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
+                                            )
+                                        }
+                                    }
+
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = "Details",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -478,6 +1101,7 @@ fun ClientRowItem(
     onDelete: () -> Unit,
     onCall: (String) -> Unit,
     onEmail: (String) -> Unit,
+    onViewDetail: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val statusColors = remember(client.paymentStatus, isDark) {
@@ -487,6 +1111,7 @@ fun ClientRowItem(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .clickable { onViewDetail() }
             .testTag("client_item_${client.clientId}"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
@@ -551,6 +1176,19 @@ fun ClientRowItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    // Vision details action
+                    IconButton(
+                        onClick = onViewDetail,
+                        modifier = Modifier.size(32.dp).testTag("client_view_btn_${client.clientId}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "View Profile info",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
                     // Payment Status Badge
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

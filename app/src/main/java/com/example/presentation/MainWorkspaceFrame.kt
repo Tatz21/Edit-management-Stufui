@@ -202,7 +202,11 @@ fun MainWorkspaceFrame(
                                     }
                                 )
                                 "clients" -> ClientDirectoryScreen(
-                                    viewModel = viewModel
+                                    viewModel = viewModel,
+                                    onNavigateToProjectDetails = { id ->
+                                        nestedProjectIdParam = id
+                                        currentScreenRoute = "projects_details"
+                                    }
                                 )
                                 "payments" -> PaymentManagementScreen(
                                     viewModel = viewModel
