@@ -16,6 +16,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +31,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.Project
+import com.example.domain.model.Invoice
+import com.example.domain.model.Client
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import com.example.presentation.MainViewModel
 import com.example.presentation.components.CompletedProjectsLineChart
 import com.example.presentation.components.MonthlyRevenueBarChart
@@ -244,6 +256,12 @@ fun DashboardScreen(
                             )
                         }
                         item {
+                            PaymentDashboardComponent(
+                                viewModel = viewModel,
+                                isDark = isDark
+                            )
+                        }
+                        item {
                             Text(
                                 text = "Visual Growth Analytics",
                                 fontWeight = FontWeight.Bold,
@@ -311,6 +329,13 @@ fun DashboardScreen(
                             projects = projects,
                             onProjectClick = onNavigateToProjectDetails,
                             onNavigateToProjects = onNavigateToProjects,
+                            isDark = isDark
+                        )
+                    }
+
+                    item {
+                        PaymentDashboardComponent(
+                            viewModel = viewModel,
                             isDark = isDark
                         )
                     }
@@ -779,16 +804,46 @@ fun ActiveProjectsSection(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val activeProjects = remember(projects) {
-        projects.filter { it.status != "Completed" && it.status != "On Hold" }
-            .sortedBy { p ->
-                try {
-                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                    sdf.parse(p.deadlineDate)?.time ?: Long.MAX_VALUE
-                } catch (e: Exception) {
-                    Long.MAX_VALUE
-                }
+    var selectedStatusFilter by remember { mutableStateOf("All") }
+    var searchQuery by remember { mutableStateOf("") }
+
+    val statusFilters = listOf("All", "In Progress", "Editing", "Review", "Finalized")
+
+    val counts = remember(projects) {
+        val nonOnHold = projects.filter { it.status != "On Hold" }
+        mapOf(
+            "All" to nonOnHold.size,
+            "In Progress" to nonOnHold.count { getDisplayStatus(it.status) == "In Progress" },
+            "Editing" to nonOnHold.count { getDisplayStatus(it.status) == "Editing" },
+            "Review" to nonOnHold.count { getDisplayStatus(it.status) == "Review" },
+            "Finalized" to nonOnHold.count { getDisplayStatus(it.status) == "Finalized" }
+        )
+    }
+
+    val filteredProjects = remember(projects, selectedStatusFilter, searchQuery) {
+        val nonOnHold = projects.filter { it.status != "On Hold" }
+        val byStatus = if (selectedStatusFilter == "All") {
+            nonOnHold
+        } else {
+            nonOnHold.filter { getDisplayStatus(it.status) == selectedStatusFilter }
+        }
+
+        (if (searchQuery.isBlank()) {
+            byStatus
+        } else {
+            byStatus.filter {
+                it.projectTitle.contains(searchQuery, ignoreCase = true) ||
+                it.clientName.contains(searchQuery, ignoreCase = true) ||
+                it.assignedEditor.contains(searchQuery, ignoreCase = true)
             }
+        }).sortedBy { p ->
+            try {
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                sdf.parse(p.deadlineDate)?.time ?: Long.MAX_VALUE
+            } catch (e: Exception) {
+                Long.MAX_VALUE
+            }
+        }
     }
 
     Card(
@@ -830,7 +885,7 @@ fun ActiveProjectsSection(
                 }
                 
                 Text(
-                    text = "${activeProjects.size} Projects",
+                    text = "${filteredProjects.size} Projects",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -840,7 +895,116 @@ fun ActiveProjectsSection(
                 )
             }
 
-            if (activeProjects.isEmpty()) {
+            // Central status filter switcher chips row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                statusFilters.forEach { statusFilter ->
+                    val isSelected = selectedStatusFilter == statusFilter
+                    val count = counts[statusFilter] ?: 0
+                    val baseColors = getDisplayStatusThemeColors(statusFilter, isDark)
+                    val activeBgColor = if (isSelected) {
+                        baseColors.bg
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    }
+                    val activeTextColor = if (isSelected) {
+                        baseColors.text
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    
+                    Surface(
+                        onClick = { selectedStatusFilter = statusFilter },
+                        shape = RoundedCornerShape(100.dp),
+                        color = activeBgColor,
+                        border = if (isSelected) {
+                            BorderStroke(1.5.dp, baseColors.text)
+                        } else {
+                            BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                        },
+                        modifier = Modifier.testTag("dashboard_filter_$statusFilter")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            if (statusFilter != "All") {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(baseColors.text, RoundedCornerShape(50.dp))
+                                )
+                            }
+                            Text(
+                                text = statusFilter,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = activeTextColor
+                            )
+                            Surface(
+                                color = if (isSelected) baseColors.text.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(100.dp)
+                            ) {
+                                Text(
+                                    text = count.toString(),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = activeTextColor,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Compact search input line
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search projects, client name, editor...", fontSize = 12.sp) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+                    .testTag("dashboard_search_input"),
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search icon",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(18.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Clear search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp)
+            )
+
+            if (filteredProjects.isEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -855,7 +1019,7 @@ fun ActiveProjectsSection(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                     )
                     Text(
-                        text = "No active video editing projects",
+                        text = if (searchQuery.isNotEmpty()) "No matching video projects found" else "No projects in category '${selectedStatusFilter}'",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -864,7 +1028,7 @@ fun ActiveProjectsSection(
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    activeProjects.take(6).forEach { project ->
+                    filteredProjects.take(6).forEach { project ->
                         ActiveProjectRowItem(
                             project = project,
                             isDark = isDark,
@@ -872,7 +1036,7 @@ fun ActiveProjectsSection(
                         )
                     }
 
-                    if (activeProjects.size > 6) {
+                    if (filteredProjects.size > 6) {
                         Surface(
                             onClick = onNavigateToProjects,
                             shape = RoundedCornerShape(12.dp),
@@ -886,7 +1050,7 @@ fun ActiveProjectsSection(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "View remaining ${activeProjects.size - 6} active projects...",
+                                    text = "View remaining ${filteredProjects.size - 6} active projects...",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
@@ -1009,6 +1173,44 @@ fun ActiveProjectRowItem(
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Professional progress stage indicator
+                val progressPercent = when (displayStatus) {
+                    "In Progress" -> 0.25f
+                    "Editing" -> 0.50f
+                    "Review" -> 0.75f
+                    "Finalized" -> 1.00f
+                    else -> 0.00f
+                }
+                val progressTrackColor = if (isDark) Color(0xFF2C2C2C) else Color(0xFFECECEC)
+                val progressFillColor = statusColors.text
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .background(progressTrackColor, RoundedCornerShape(100.dp))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progressPercent)
+                                .background(progressFillColor, RoundedCornerShape(100.dp))
+                        )
+                    }
+                    Text(
+                        text = "${(progressPercent * 100).toInt()}%",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = progressFillColor
+                    )
+                }
             }
 
             Column(
@@ -1076,7 +1278,8 @@ private data class StatusTheme(val bg: Color, val text: Color)
 
 private fun getDisplayStatus(status: String): String {
     return when (status) {
-        "New", "Assigned", "Editing" -> "In Progress"
+        "New", "Assigned" -> "In Progress"
+        "Editing" -> "Editing"
         "Preview Sent", "Revision" -> "Review"
         "Final Delivery", "Completed" -> "Finalized"
         else -> "On Hold"
@@ -1088,6 +1291,10 @@ private fun getDisplayStatusThemeColors(displayStatus: String, isDark: Boolean):
         "In Progress" -> StatusTheme(
             bg = if (isDark) Color(0xFFF59E0B).copy(alpha = 0.15f) else Color(0xFFFEF3C7),
             text = if (isDark) Color(0xFFFBBF24) else Color(0xFFB45309)
+        )
+        "Editing" -> StatusTheme(
+            bg = if (isDark) Color(0xFFE28743).copy(alpha = 0.15f) else Color(0xFFFBE9E7),
+            text = if (isDark) Color(0xFFF4511E) else Color(0xFFBF360C)
         )
         "Review" -> StatusTheme(
             bg = if (isDark) Color(0xFF0EA5E9).copy(alpha = 0.15f) else Color(0xFFE0F2FE),
@@ -1138,5 +1345,705 @@ private fun getStatusThemeColors(status: String, isDark: Boolean): StatusTheme {
             bg = if (isDark) Color(0xFF3F37C9).copy(alpha = 0.4f) else Color(0xFFE8EAF6),
             text = if (isDark) Color(0xFF4895EF) else Color(0xFF3F37C9)
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PaymentDashboardComponent(
+    viewModel: MainViewModel,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val invoices = remember { viewModel.invoices }.collectAsState(initial = emptyList()).value
+    val clients = remember { viewModel.clients }.collectAsState(initial = emptyList()).value
+    val projects = remember { viewModel.projects }.collectAsState(initial = emptyList()).value
+    val context = LocalContext.current
+
+    var selectedStatusFilter by remember { mutableStateOf("All") }
+    var searchQuery by remember { mutableStateOf("") }
+    var showLogDialog by remember { mutableStateOf(false) }
+
+    // Dialog state
+    var selectedClient by remember { mutableStateOf<Client?>(null) }
+    var selectedProject by remember { mutableStateOf<Project?>(null) }
+    var customInvoiceNumber by remember { mutableStateOf("") }
+    var invoiceAmount by remember { mutableStateOf("") }
+    var invoiceStatus by remember { mutableStateOf("Pending") }
+    var issueDate by remember { mutableStateOf("") }
+    var dueDate by remember { mutableStateOf("") }
+    var invoiceNotes by remember { mutableStateOf("") }
+
+    var clientDropdownExpanded by remember { mutableStateOf(false) }
+    var projectDropdownExpanded by remember { mutableStateOf(false) }
+    var statusDropdownExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showLogDialog) {
+        if (showLogDialog) {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val calendar = Calendar.getInstance()
+            issueDate = sdf.format(calendar.time)
+            calendar.add(Calendar.DAY_OF_YEAR, 14)
+            dueDate = sdf.format(calendar.time)
+            
+            val num = 1001 + invoices.size
+            customInvoiceNumber = "INV-${Calendar.getInstance().get(Calendar.YEAR)}-$num"
+            
+            selectedClient = null
+            selectedProject = null
+            invoiceAmount = ""
+            invoiceStatus = "Pending"
+            invoiceNotes = ""
+        }
+    }
+
+    LaunchedEffect(selectedProject) {
+        selectedProject?.let { p ->
+            if (invoiceAmount.isEmpty()) {
+                invoiceAmount = p.remainingAmount.toString()
+            }
+        }
+    }
+
+    val filteredInvoices = remember(invoices, selectedStatusFilter, searchQuery) {
+        invoices.filter { inv ->
+            val matchesFilter = when (selectedStatusFilter) {
+                "All" -> true
+                "Paid" -> inv.status == "Paid"
+                "Pending" -> inv.status == "Pending" || inv.status == "Overdue"
+                else -> true
+            }
+
+            val matchesQuery = if (searchQuery.isBlank()) {
+                true
+            } else {
+                inv.invoiceNumber.contains(searchQuery, ignoreCase = true) ||
+                inv.clientName.contains(searchQuery, ignoreCase = true) ||
+                (inv.projectName?.contains(searchQuery, ignoreCase = true) ?: false)
+            }
+
+            matchesFilter && matchesQuery
+        }.sortedBy { inv ->
+            try {
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                sdf.parse(inv.dueDate)?.time ?: Long.MAX_VALUE
+            } catch (e: Exception) {
+                Long.MAX_VALUE
+            }
+        }
+    }
+
+    val upcomingCount = remember(invoices) {
+        invoices.count { it.status == "Pending" || it.status == "Overdue" }
+    }
+    val upcomingAmount = remember(invoices) {
+        invoices.filter { it.status == "Pending" || it.status == "Overdue" }.sumOf { it.amount }
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("dashboard_payment_card"),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Payments,
+                        contentDescription = "Payments Dashboard Icon",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Payments & Receivables",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Button(
+                    onClick = { showLogDialog = true },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    modifier = Modifier.testTag("btn_log_invoice")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Add Invoice",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Log Invoice", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = if (isDark) Color(0xFF1E1E1E) else Color(0xFFF5F5F5),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .border(
+                        BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Outstanding Invoices",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "$upcomingCount Pending",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (upcomingCount > 0) Color(0xFFFBBF24) else MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(36.dp)
+                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                )
+
+                Column(modifier = Modifier.weight(1.1f)) {
+                    Text(
+                        text = "Amount Due",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "$${String.format(Locale.getDefault(), "%,.0f", upcomingAmount)} USD",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (upcomingCount > 0) Color(0xFFFBBF24) else Color(0xFF10B981)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val filters = listOf("All", "Pending", "Paid")
+                filters.forEach { status ->
+                    val isSelected = selectedStatusFilter == status
+                    val activeBg = if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                    }
+                    val activeText = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Surface(
+                        onClick = { selectedStatusFilter = status },
+                        shape = RoundedCornerShape(100.dp),
+                        color = activeBg,
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                        ),
+                        modifier = Modifier.testTag("dashboard_invoice_filter_chip_$status")
+                    ) {
+                        Text(
+                            text = status,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = activeText,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search by serial #, client name...", fontSize = 11.sp) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+                    .testTag("dashboard_payment_search"),
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                ),
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp)
+            )
+
+            if (filteredInvoices.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (searchQuery.isNotEmpty()) "No matching invoices found" else "No invoices recorded",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    filteredInvoices.take(5).forEach { invoice ->
+                        DashboardInvoiceRowItem(
+                            invoice = invoice,
+                            isDark = isDark,
+                            onStatusChange = { newStatus ->
+                                viewModel.addOrUpdateInvoice(invoice.copy(status = newStatus))
+                            }
+                        )
+                    }
+
+                    if (filteredInvoices.size > 5) {
+                        Text(
+                            text = "+ ${filteredInvoices.size - 5} more invoices",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showLogDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogDialog = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.PostAdd, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text("Log Invoice Record", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = selectedClient?.name ?: "Choose Client Profile *",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Associated Client") },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            trailingIcon = {
+                                IconButton(onClick = { clientDropdownExpanded = !clientDropdownExpanded }) {
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().clickable { clientDropdownExpanded = true },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                            textStyle = MaterialTheme.typography.bodyMedium
+                        )
+
+                        DropdownMenu(
+                            expanded = clientDropdownExpanded,
+                            onDismissRequest = { clientDropdownExpanded = false },
+                            modifier = Modifier.fillMaxWidth(0.8f)
+                        ) {
+                            clients.forEach { client ->
+                                DropdownMenuItem(
+                                    text = { Text(client.name) },
+                                    onClick = {
+                                        selectedClient = client
+                                        selectedProject = null
+                                        clientDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    if (selectedClient != null) {
+                        val clientProjList = remember(projects, selectedClient) {
+                            projects.filter {
+                                (selectedClient?.email?.isNotEmpty() == true && it.clientEmail.equals(selectedClient?.email, ignoreCase = true)) ||
+                                it.clientName.equals(selectedClient?.name, ignoreCase = true)
+                            }
+                        }
+
+                        if (clientProjList.isNotEmpty()) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = selectedProject?.projectTitle ?: "General billing (No linked project)",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Link to specific Project") },
+                                    leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) },
+                                    trailingIcon = {
+                                        IconButton(onClick = { projectDropdownExpanded = !projectDropdownExpanded }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().clickable { projectDropdownExpanded = true },
+                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary),
+                                    textStyle = MaterialTheme.typography.bodyMedium
+                                )
+
+                                DropdownMenu(
+                                    expanded = projectDropdownExpanded,
+                                    onDismissRequest = { projectDropdownExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("General billing (No Link)") },
+                                        onClick = {
+                                            selectedProject = null
+                                            projectDropdownExpanded = false
+                                        }
+                                    )
+                                    clientProjList.forEach { proj ->
+                                        DropdownMenuItem(
+                                            text = { Text("${proj.projectTitle} ($${proj.remainingAmount} left)") },
+                                            onClick = {
+                                                selectedProject = proj
+                                                projectDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = customInvoiceNumber,
+                        onValueChange = { customInvoiceNumber = it },
+                        label = { Text("Invoice Number") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
+                    )
+
+                    OutlinedTextField(
+                        value = invoiceAmount,
+                        onValueChange = { invoiceAmount = it },
+                        label = { Text("Billable Amount ($)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        prefix = { Text("$ ") },
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
+                    )
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = invoiceStatus,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Invoice Status") },
+                            modifier = Modifier.fillMaxWidth().clickable { statusDropdownExpanded = true },
+                            trailingIcon = {
+                                IconButton(onClick = { statusDropdownExpanded = !statusDropdownExpanded }) {
+                                    Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "status dropdown")
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary)
+                        )
+
+                        DropdownMenu(
+                            expanded = statusDropdownExpanded,
+                            onDismissRequest = { statusDropdownExpanded = false }
+                        ) {
+                            Invoice.STATUS_OPTIONS.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        invoiceStatus = option
+                                        statusDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = issueDate,
+                            onValueChange = { issueDate = it },
+                            label = { Text("Issue Date") },
+                            placeholder = { Text("YYYY-MM-DD") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = dueDate,
+                            onValueChange = { dueDate = it },
+                            label = { Text("Due Date") },
+                            placeholder = { Text("YYYY-MM-DD") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = invoiceNotes,
+                        onValueChange = { invoiceNotes = it },
+                        label = { Text("Notes / Descriptions") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 2
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val client = selectedClient
+                        val amountParsed = invoiceAmount.trim().toDoubleOrNull()
+                        
+                        if (client == null) {
+                            Toast.makeText(context, "Please select an existing client", Toast.LENGTH_SHORT).show()
+                        } else if (customInvoiceNumber.trim().isEmpty()) {
+                            Toast.makeText(context, "Please supply an invoice number", Toast.LENGTH_SHORT).show()
+                        } else if (amountParsed == null || amountParsed <= 0.0) {
+                            Toast.makeText(context, "Please enter an amount greater than 0.0", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val newInvoice = Invoice(
+                                invoiceId = UUID.randomUUID().toString(),
+                                clientId = client.clientId,
+                                clientName = client.name,
+                                projectId = selectedProject?.projectId,
+                                projectName = selectedProject?.projectTitle,
+                                invoiceNumber = customInvoiceNumber.trim(),
+                                amount = amountParsed,
+                                status = invoiceStatus,
+                                issueDate = issueDate.trim(),
+                                dueDate = dueDate.trim(),
+                                notes = invoiceNotes.trim()
+                            )
+                            viewModel.addOrUpdateInvoice(newInvoice)
+                            showLogDialog = false
+                            Toast.makeText(context, "Logged ${newInvoice.invoiceNumber} successfully!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.testTag("dialog_invoice_confirm")
+                ) {
+                    Text("Issue Invoice")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showLogDialog = false },
+                    modifier = Modifier.testTag("dialog_dismiss_button")
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun DashboardInvoiceRowItem(
+    invoice: Invoice,
+    isDark: Boolean,
+    onStatusChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val statusColor = when (invoice.status) {
+        "Paid" -> Color(0xFF10B981)
+        "Pending" -> Color(0xFFFBBF24)
+        "Overdue" -> Color(0xFFEF4444)
+        else -> Color(0xFF6B7280)
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("invoice_row_${invoice.invoiceId}"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Receipt,
+                    contentDescription = null,
+                    tint = statusColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = invoice.invoiceNumber,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        text = invoice.clientName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = "Due Date",
+                        tint = if (invoice.status == "Overdue") Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = "Due: ${invoice.dueDate}",
+                        fontSize = 11.sp,
+                        color = if (invoice.status == "Overdue") Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "$${String.format(Locale.getDefault(), "%,.0f", invoice.amount)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(100.dp))
+                            .clickable { dropdownExpanded = true }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .background(statusColor, RoundedCornerShape(50))
+                        )
+                        Text(
+                            text = invoice.status,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = statusColor
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Change Status",
+                            tint = statusColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false }
+                    ) {
+                        Invoice.STATUS_OPTIONS.forEach { opt ->
+                            DropdownMenuItem(
+                                text = { Text(opt) },
+                                onClick = {
+                                    onStatusChange(opt)
+                                    dropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
