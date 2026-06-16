@@ -25,6 +25,14 @@ import com.example.presentation.project.ProjectListScreen
 import com.example.presentation.reports.ReportsScreen
 import com.example.presentation.settings.SettingsScreen
 import com.example.presentation.clients.*
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import com.example.domain.model.Project
+import com.example.domain.model.Client
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -144,12 +152,51 @@ fun MainWorkspaceFrame(
                             }
                         }
                     ) { scaffoldPadding ->
+                        val allProjects by viewModel.projects.collectAsState()
+                        val allClients by viewModel.clients.collectAsState()
+
+                        var globalSearchQuery by remember { mutableStateOf("") }
+                        var isSearchFocused by remember { mutableStateOf(false) }
+
+                        val matchingProjects = remember(globalSearchQuery, allProjects) {
+                            if (globalSearchQuery.isBlank()) emptyList() else {
+                                allProjects.filter {
+                                    it.projectTitle.contains(globalSearchQuery, ignoreCase = true) ||
+                                    it.clientName.contains(globalSearchQuery, ignoreCase = true) ||
+                                    it.assignedEditor.contains(globalSearchQuery, ignoreCase = true)
+                                }
+                            }
+                        }
+
+                        val matchingClients = remember(globalSearchQuery, allClients) {
+                            if (globalSearchQuery.isBlank()) emptyList() else {
+                                allClients.filter {
+                                    it.name.contains(globalSearchQuery, ignoreCase = true) ||
+                                    it.email.contains(globalSearchQuery, ignoreCase = true)
+                                }
+                            }
+                        }
+
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(scaffoldPadding)
                         ) {
-                            when (currentScreenRoute) {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                // Global search input field in the top navigation
+                                GlobalSearchTopNavigation(
+                                    query = globalSearchQuery,
+                                    onQueryChange = { globalSearchQuery = it },
+                                    isFocused = isSearchFocused,
+                                    onFocusChange = { isSearchFocused = it }
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                ) {
+                                    when (currentScreenRoute) {
                                 "dashboard" -> DashboardScreen(
                                     viewModel = viewModel,
                                     onNavigateToProjects = { currentScreenRoute = "projects_list" },
@@ -219,6 +266,31 @@ fun MainWorkspaceFrame(
                                 )
                                 "settings" -> SettingsScreen(
                                     viewModel = viewModel
+                                )
+                            }
+                        }
+                    }
+
+                            // Beautiful floating quick lookup results overlay on top of screen content
+                            if (isSearchFocused && globalSearchQuery.isNotEmpty()) {
+                                GlobalSearchResultsOverlay(
+                                    matchingProjects = matchingProjects,
+                                    matchingClients = matchingClients,
+                                    onProjectClicked = { projectId ->
+                                        nestedProjectIdParam = projectId
+                                        currentScreenRoute = "projects_details"
+                                        globalSearchQuery = ""
+                                        isSearchFocused = false
+                                    },
+                                    onClientClicked = { client ->
+                                        currentScreenRoute = "clients"
+                                        globalSearchQuery = ""
+                                        isSearchFocused = false
+                                    },
+                                    onClose = {
+                                        globalSearchQuery = ""
+                                        isSearchFocused = false
+                                    }
                                 )
                             }
                         }
@@ -312,3 +384,279 @@ private data class NavItem(
     val icon: ImageVector,
     val desc: String = ""
 )
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GlobalSearchTopNavigation(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    isFocused: Boolean,
+    onFocusChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("global_search_container"),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(22.dp)
+            )
+
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                placeholder = {
+                    Text(
+                        text = "Search projects or client names...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("global_search_input_field")
+                    .onFocusChanged { focusState ->
+                        onFocusChange(focusState.isFocused)
+                    },
+                singleLine = true,
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(
+                            onClick = { onQueryChange("") },
+                            modifier = Modifier.testTag("global_search_clear_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear search query",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(24.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@Composable
+fun GlobalSearchResultsOverlay(
+    matchingProjects: List<Project>,
+    matchingClients: List<Client>,
+    onProjectClicked: (String) -> Unit,
+    onClientClicked: (Client) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.4f))
+            .clickable { onClose() }
+            .testTag("global_search_overlay"),
+        color = Color.Transparent
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .clickable(enabled = false) { }
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .testTag("global_search_results_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Search Results Lookup",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        TextButton(onClick = onClose) {
+                            Text("Dismiss", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        if (matchingProjects.isEmpty() && matchingClients.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "No projects or clients match your search query",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (matchingProjects.isNotEmpty()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Projects (${matchingProjects.size})",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+
+                                matchingProjects.forEach { proj ->
+                                    Surface(
+                                        onClick = { onProjectClicked(proj.projectId) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Folder,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = proj.projectTitle,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "Client: ${proj.clientName} • Assigned: ${proj.assignedEditor}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                )
+                                            }
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                shape = RoundedCornerShape(100.dp)
+                                            ) {
+                                                Text(
+                                                    text = proj.status,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (matchingClients.isNotEmpty()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Clients (${matchingClients.size})",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+
+                                matchingClients.forEach { client ->
+                                    Surface(
+                                        onClick = { onClientClicked(client) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContactMail,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.secondary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = client.name,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "Email: ${client.email} • Ph: ${client.phone}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
